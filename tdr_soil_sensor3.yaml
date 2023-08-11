@@ -1,0 +1,97 @@
+esphome:
+  name: tdr-soil-sensor-on-esp32
+  includes:
+   
+  libraries:
+    - Wire
+    - EspSoftwareSerial
+    
+external_components:
+  - source: 
+      type: local
+      path: components
+    components: [tdr_soil_sensor3]
+
+esp32:
+  board: esp-wrover-kit
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: "testing"
+
+ota:
+  password: "testing"
+
+wifi:
+  ssid: "Bbox-727DF9A6"
+  password: "c7HwHdEL33bhCJ4fVm"
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp32-For-Testing-Mlx9060"
+    password: "Rhg1rO0ix8Oz"
+
+captive_portal:
+
+
+### RS485
+uart:
+  id: modbus_serial
+  rx_pin: 16
+  tx_pin: 17
+  baud_rate: 4800
+  stop_bits: 1
+
+modbus:
+  id: modbus1
+  uart_id: modbus_serial
+
+modbus_controller:
+  - id: con_modbus_name
+    update_interval: 11s
+    address: 0x1
+    command_throttle: 150ms
+    setup_priority: -10
+
+ 
+# TDR Soil Sensor 
+tdr_soil_sensor3:
+  - id: TDR0
+    wc:
+      id: WC
+      name: "Moisture WC"
+      address: 0x0000
+      unit_of_measurement: "%"
+      accuracy_decimals: 1
+      state_class: measurement
+    temperature: # Soil temperature in degree 
+      id: Temp
+      name: "Soil temp"
+      address: 0x0001
+      accuracy_decimals: 1
+      unit_of_measurement: "°C"
+      state_class: measurement
+    ec:
+      id: EC
+      name: "Conductivity 1 dS/m = 1 mS/cm"
+      address: 0x0002
+      accuracy_decimals: 1
+      state_class: measurement
+
+    soil_temperature:
+      name: "Soil Calibrated Temperature"
+      unit_of_measurement: "°C"
+      accuracy_decimals: 1
+    soil_humidity:
+      name: "Soil Calibrated Humidity"
+      unit_of_measurement: "%"
+      accuracy_decimals: 1
+    soil_pw_ec:
+      name: "Soil soil PW EC"
+      unit_of_measurement: ""
+      accuracy_decimals: 1
