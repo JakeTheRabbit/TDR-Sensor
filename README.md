@@ -26,6 +26,6 @@ Instructions:
 
 
 There are three versions
-tdr_soil_sensor is the first implementation converting the Arduino code to Esphome . The all code is identical to the Arduino code. There was zero point in making this.
-tdr_soil_sensor_2 is the complete rewriting of the modbus sensor with the home assistant template yaml calibration previously in configuration.yaml now as a component this is for  coco coir calibration. 
-tdr_soil_sensor_3 is identical to the second one in the implementation but has the Arduino code file calibration for Rockwool by Emperisium.
+- tdr_soil_sensor is the first implementation converting the Arduino code to Esphome . The all code is identical to the Arduino code. There was zero point in making this.
+- tdr_soil_sensor_2 is the complete rewriting of the modbus sensor with the home assistant template yaml calibration previously in configuration.yaml now as a component this is for  coco coir calibration. 
+- tdr_soil_sensor_3 is identical to the second one in the implementation but has the Arduino code file calibration for Rockwool by Emperisium.
