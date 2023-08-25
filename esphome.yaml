@@ -10,7 +10,7 @@ external_components:
   - source: 
       type: local
       path: components
-    components: [tdr_soil_sensor2]
+    components: [tdr_soil_sensor3] #Change to tdr_soil_sensor, tdr_soil_sensor2 or tdr_soil_sensor3 to pick which custom component you use
 
 esp32:
   board: esp32-s3-devkitc-1
