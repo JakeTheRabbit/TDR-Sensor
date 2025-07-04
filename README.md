@@ -1,8 +1,18 @@
 # ESPHome SDI-12 Soil Sensor Node
 
+<img width="422" alt="image" src="https://github.com/user-attachments/assets/016be169-07ad-4ae3-9595-a7683551daf5" />
+
+<img width="1507" alt="image" src="https://github.com/user-attachments/assets/bfbed084-31c4-42fe-8025-02fab2559257" />
+
 This project provides a complete ESPHome configuration for creating a robust, WiFi-enabled sensor node that reads data from an SDI-12 soil moisture sensor. It is designed to run on an M5Stack Atom and integrates seamlessly with Home Assistant.
 
 The configuration not only reads raw data but also performs on-device calculations to derive calibrated Volumetric Water Content (VWC) and temperature-compensated Pore Water Electrical Conductivity (EC), providing more accurate and actionable data for agricultural or horticultural applications.
+
+## Disclaimer
+
+- This project is a work in progress and has not been fully tested.
+- Do not trust this implementation blindly; perform proper testing and calibration before relying on it for critical applications.
+- This guide assumes a basic knowledge of ESPHome and Home Assistant.
 
 ## Features
 
@@ -17,10 +27,13 @@ The configuration not only reads raw data but also performs on-device calculatio
 
 ## Hardware Requirements
 
-* **Microcontroller**: [M5Stack Atom Lite](https://shop.m5stack.com/products/atom-lite-esp32-development-kit) or similar ESP32 board.
-* **SDI-12 Sensor**: Any SDI-12 compatible soil sensor (e.g., a BGT-1, Acclima TDR-315, or METER TEROS 12).
+* **Microcontroller**: [M5Stack Atom Lite](https://shop.m5stack.com/products/atom-lite-esp32-development-kit) or similar ESP32 board (tested with M5 Atom, M5 Atom S3, M5 PoEESP32, and M5 Dial).
+* **SDI-12 Sensor**: 
+    * METER TEROS 12
+    * BGT-SEC(Z2) (a compatible alternative, available on [Alibaba](https://www.alibaba.com/product-detail/China-low-price-CE-IP68-SID12_1600643601689.html) - choose the SDI-12 version).
+    * Other SDI-12 compatible sensors should also work.
 * **Power Supply**: A stable 3.3V or 5V power supply, depending on your board and sensor requirements.
-* **Wiring**: Jumper wires for connecting the sensor to the ESP32.
+* **Wiring**: Jumper wires or a Grove-compatible cable for connections.
 
 ### Wiring
 
@@ -42,7 +55,7 @@ Ensure you have an ESPHome instance running. This can be as a Home Assistant Add
 
 ### 2. Secrets File
 
-Create a `secrets.yaml` file in your ESPHome configuration directory and add your network credentials and API key. This keeps sensitive information out of your main configuration file.
+Create a `secrets.yaml` file in your ESPHome configuration directory and add your network credentials. This keeps sensitive information out of your main configuration file.
 
 ```yaml
 # secrets.yaml
@@ -108,3 +121,9 @@ return pore_ec / 1000.0;
 ## Contributing
 
 Contributions, issues, and feature requests are welcome. Please feel free to open an issue to discuss your ideas.
+
+## References
+
+* **TEROS 12 Manual**: The calibration and conversion formulas were derived based on information in the [official TEROS 12 Manual](https://www.labcell.com/media/140632/teros12%20manual.pdf) (see pages 15-17).
+* **Inspiration**: This project was originally inspired by the work of [kromadg's soil-sensor](https://github.com/kromadg/soil-sensor).
+* **M5Stack ESPHome Components**: Credits to [Chill Division](https://github.com/Chill-Division/M5Stack-ESPHome) for their work on M5Stack components for ESPHome.
