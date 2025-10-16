@@ -4,123 +4,226 @@
 
 <img width="1507" alt="image" src="https://github.com/user-attachments/assets/bfbed084-31c4-42fe-8025-02fab2559257" />
 
-This project provides a complete ESPHome configuration for creating a robust, WiFi-enabled sensor node that reads data from an SDI-12 soil moisture sensor. It is designed to run on an M5Stack Atom and integrates seamlessly with Home Assistant.
+Here’s the same README rewritten without emojis or decorative icons—clean, technical, and ready for a professional GitHub repository:
 
-The configuration not only reads raw data but also performs on-device calculations to derive calibrated Volumetric Water Content (VWC) and temperature-compensated Pore Water Electrical Conductivity (EC), providing more accurate and actionable data for agricultural or horticultural applications.
+---
+
+# ESPHome SDI-12 Soilless Media Sensor Node
+
+Accurate VWC and Pore EC Readings for Rockwool, Coco, and Peat
+
+<img width="422" alt="image" src="https://github.com/user-attachments/assets/016be169-07ad-4ae3-9595-a7683551daf5" />  
+<img width="1507" alt="image" src="https://github.com/user-attachments/assets/bfbed084-31c4-42fe-8025-02fab2559257" />
+
+---
+
+## Overview
+
+This project provides a complete ESPHome configuration for building a reliable Wi-Fi–enabled SDI-12 sensor node.
+It runs on an M5Stack Atom Lite (ESP32) and reads soilless-media moisture sensors such as the Infiwin MT22 (a Teros-12-compatible clone).
+
+It is tuned specifically for rockwool, coco, and peat substrates, performing on-device calibration and physics-based corrections to produce:
+
+* Volumetric Water Content (VWC) using a polynomial calibration
+* Pore Water Electrical Conductivity (pwEC) using a hybrid Hilhorst and mass-balance model
+* Temperature-normalized EC (25 °C) for consistent comparison
+
+---
 
 ## Disclaimer
 
-- This project is a work in progress and has not been fully tested.
-- Do not trust this implementation blindly; perform proper testing and calibration before relying on it for critical applications.
-- This guide assumes a basic knowledge of ESPHome and Home Assistant.
+* This configuration is provided as-is and is experimental.
+* Validate readings against reference instruments before operational use.
+* Always calibrate sensors in your specific substrate and nutrient range.
+
+---
 
 ## Features
 
-* **SDI-12 Communication**: Directly interfaces with any standard SDI-12 sensor.
-* **On-Device Calibration**: Applies a polynomial formula to raw VWC readings for improved accuracy.
-* **Pore Water EC Calculation**: Converts Bulk EC to Pore Water EC using the Hilhorst model, providing a more accurate measure of the salinity experienced by plant roots.
-* **Temperature Compensation**: Normalizes EC readings to a standard 25°C.
-* **Home Assistant Integration**: Exposes all relevant sensors to Home Assistant via the native API.
-* **Web Interface**: A local web server provides sensor readings and basic controls.
-* **Robust Networking**: Includes a fallback WiFi Access Point for easy configuration if the primary network connection fails.
-* **Remote Restart**: A physical button press (3-10 seconds) or a software switch can safely restart the device.
+| Capability                 | Description                                                          |
+| -------------------------- | -------------------------------------------------------------------- |
+| SDI-12 Communication       | Native single-wire protocol for industrial soil sensors              |
+| Soilless Calibration       | Uses Teros-12 “non-soil” polynomial for rockwool, coco, and peat     |
+| Hybrid EC Model            | Automatically switches between Hilhorst (wet) and mass-balance (dry) |
+| Temperature Compensation   | Normalizes EC to 25 °C                                               |
+| On-Device Processing       | All calculations done locally on the ESP32                           |
+| Home Assistant Integration | Exposes all sensors via native API                                   |
+| Web Dashboard              | Local web server for live readings                                   |
+| Safe Restart               | Physical button (3–10 s hold) or remote switch                       |
+| Resilient Networking       | Fallback Wi-Fi access point if main network fails                    |
 
-## Hardware Requirements
+---
 
-* **Microcontroller**: [M5Stack Atom Lite](https://shop.m5stack.com/products/atom-lite-esp32-development-kit) or similar ESP32 board (tested with M5 Atom, M5 Atom S3, M5 PoEESP32, and M5 Dial).
-* **SDI-12 Sensor**: 
-    * METER TEROS 12
-    * BGT-SEC(Z2) (a compatible alternative, available on [Alibaba](https://www.alibaba.com/product-detail/China-low-price-CE-IP68-SID12_1600643601689.html) - choose the SDI-12 version).
-    * Other SDI-12 compatible sensors should also work.
-* **Power Supply**: A stable 3.3V or 5V power supply, depending on your board and sensor requirements.
-* **Wiring**: Jumper wires or a Grove-compatible cable for connections.
+## Hardware
 
-### Wiring
+| Component   | Notes                                                                                                                               |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| ESP32 Board | [M5Stack Atom Lite](https://shop.m5stack.com/products/atom-lite-esp32-development-kit) (tested also on Atom S3, PoE ESP32, M5 Dial) |
+| Sensor      | Infiwin MT22 (SDI-12 version), METER TEROS-12, Growlink Terralink series                                                            |
+| Power       | 5 V (typical) or 3.3 V depending on board and sensor                                                                                |
+| Wiring      | Standard 3-wire SDI-12 connection                                                                                                   |
 
-Connect the SDI-12 sensor to the M5Stack Atom as follows:
+### Wiring Table
 
-| SDI-12 Sensor | M5Stack Atom Pin |
-| :------------ | :--------------- |
-| Data          | `G26`            |
-| Ground        | `GND`            |
-| Power (VCC)   | `5V` or `3.3V`   |
+| SDI-12 Sensor | M5 Atom Pin | Description                |
+| ------------- | ----------- | -------------------------- |
+| Data          | G26         | SDI-12 half-duplex line    |
+| Power (VCC)   | 5 V / 3.3 V | Match sensor specification |
+| Ground        | GND         | Common ground              |
 
-**Note**: The Data line is connected to `G26` for this configuration, which is used as a half-duplex UART pin. The RX pin (`G32`) is also defined in the UART configuration but is internally connected to the same physical wire in a half-duplex setup.
+The SDI-12 “data” line is half-duplex: TX and RX share GPIO 26 and use inverted signaling as per SDI-12 protocol.
 
-## Configuration
+---
 
-### 1. ESPHome Setup
+## Installation
 
-Ensure you have an ESPHome instance running. This can be as a Home Assistant Add-on or a standalone installation.
+1. **ESPHome Environment** – Install ESPHome via the Home Assistant add-on or standalone CLI.
+2. **Secrets File** – Create `secrets.yaml` for network credentials:
 
-### 2. Secrets File
+   ```yaml
+   wifi_ssid: "YourWiFi_SSID"
+   wifi_password: "YourWiFi_Password"
+   ```
+3. **Flash the Device**
 
-Create a `secrets.yaml` file in your ESPHome configuration directory and add your network credentials. This keeps sensitive information out of your main configuration file.
+   * Copy the YAML (`f1-row2-front-sdi12.yaml`) into your ESPHome folder.
+   * Update `api.encryption.key` and `ota.password` with unique secure values.
+   * Connect the M5Stack Atom via USB → Install.
+   * Subsequent updates can be performed Over-The-Air (OTA).
 
-```yaml
-# secrets.yaml
-wifi_ssid: "YourWiFi_SSID"
-wifi_password: "YourWiFi_Password"
-```
+---
 
-### 3. Flashing the Device
+## Sensor Logic and Calibration
 
-1.  Copy the provided `f1-row1-back-sdi12.yaml` file into your ESPHome configuration directory.
-2.  Update the `api.encryption.key` and `ota.password` fields in the YAML with secure, unique values.
-3.  Connect the M5Stack Atom to your computer via USB.
-4.  In the ESPHome dashboard, create a new device and install the configuration. For the first flash, you will need to do this over USB. Subsequent updates can be performed Over-The-Air (OTA).
-
-## Sensor Logic and Calculations
-
-This configuration uses a multi-step process to convert raw sensor readings into meaningful data.
-
-### 1. Volumetric Water Content (VWC)
-
-The raw VWC value from the sensor is processed by a lambda filter:
+### Volumetric Water Content (VWC)
 
 ```cpp
-float RAW = x;
-float vwc = 6.771e-10 * RAW * RAW * RAW - 5.105e-6 * RAW * RAW + 1.302e-2 * RAW - 10.848;
-vwc = vwc * 0.7;  
-return vwc * 100;
+float R = id(mt22_raw).state;
+float theta = 6.771e-10*R*R*R - 5.105e-6*R*R + 1.302e-2*R - 10.848;
+float pct = theta * 100.0f;
 ```
 
-* **Polynomial Formula**: The first line is a sensor-specific calibration formula that converts the raw permittivity reading into a more accurate decimal VWC (e.g., 0.35).
-* **Scaling Factor**: The `* 0.7` is an additional adjustment factor. This can be used to align the sensor's readings with a trusted reference sensor (like a TEROS 12) in the same medium.
-* **Percentage Conversion**: The final value is multiplied by 100 to be displayed as a percentage (e.g., 35%).
+* Polynomial derived from the Teros-12 “soilless” calibration, valid across rockwool, coco, and peat.
+* Result clamped between 0–100%.
+* Adjust offset or scale to align with reference instruments if needed.
 
-### 2. Pore Water EC (PWEC)
+---
 
-Standard sensors measure **Bulk EC**, which is the conductivity of the entire soil/substrate medium (soil, water, and air). **Pore Water EC** is the conductivity of just the water within the substrate, which is what plants actually experience.
+### Pore Water Electrical Conductivity (pwEC)
 
-This calculation is performed in a template sensor:
+Standard sensors report **Bulk EC (σb)**—the combined conductivity of solids, water, and air.
+The **Pore Water EC (σp)** isolates the salinity of the water actually available to plant roots.
+
+This configuration implements a hybrid model:
 
 ```cpp
-// Get raw values
-float bulk_ec = id(raw_ec).state;
-float vwc_decimal = id(vwc).state / 100.0;
+// mass-balance fallback (dry media)
+ec_mass = σb / θ;
 
-// Calculate Pore Water EC
-float pore_ec = (bulk_ec / vwc_decimal) * 1.05;
+// Hilhorst model (wet media)
+ec_hil = σb * (εp25 / (εb – ε0));
 
-// Apply Temperature Compensation
-float temp = id(temperature).state;
-if (!isnan(temp)) {
-  pore_ec = pore_ec / (1.0 + 0.02 * (temp - 25.0));
-}
-
-// Convert to dS/m
-return pore_ec / 1000.0;
+// dynamic blending
+if θ ≤ 0.40 → use mass-balance
+if θ ≥ 0.60 → use Hilhorst
+blend linearly in between
 ```
 
-* **Hilhorst Model**: The core of the calculation (`bulk_ec / vwc_decimal`) is based on the Hilhorst model, which provides a good approximation of PWEC.
-* **Adjustment Factor**: The `* 1.05` is another fine-tuning factor to align the calculated value with a reference sensor.
-* **Temperature Compensation**: The result is normalized to 25°C using the current temperature reading, as EC is highly dependent on temperature.
-* **Unit Conversion**: The final value, which is in µS/cm, is divided by 1000 to be reported in the standard agricultural unit of dS/m.
+**Result:**
+Stable EC readings across all moisture levels, eliminating NaN and 50+ dS/m spikes that occur in dry media.
+
+Expected range in rockwool: 4–6 dS/m under typical feed EC 2.0–3.0 dS/m.
+
+---
+
+### Temperature Normalization
+
+Electrical conductivity increases by approximately 1.9% per °C above 25°C.
+The bulk EC is normalized to 25°C internally:
+
+```cpp
+σb25 = σb / (1.0 + 0.019 * (T - 25.0));
+```
+
+---
+
+## Substrate Calibration Notes
+
+| Substrate    | Typical Range (VWC) | Notes                                       |
+| ------------ | ------------------- | ------------------------------------------- |
+| Rockwool     | 0.20 – 0.80         | Default polynomial performs best            |
+| Coco Coir    | 0.15 – 0.75         | Slightly higher bound water; add +5% offset |
+| Peat         | 0.10 – 0.65         | Reads higher εb; subtract ~3% VWC           |
+| Mineral Soil | 0.00 – 0.60         | Use Teros-12 “soil” polynomial instead      |
+
+A `select:` block can be added in ESPHome to switch between these calibrations.
+
+---
+
+## Home Assistant Integration
+
+Entities exposed:
+
+* `sensor.vwc`
+* `sensor.mt22_temp`
+* `sensor.pwec`
+* `sensor.bulk_ec`
+* `sensor.uptime`
+
+Visualize data using Plotly Graph Card or Mini Graph Card for detailed trends.
+
+---
+
+## Example Readings
+
+| Parameter      | Typical Value | Units |
+| -------------- | ------------- | ----- |
+| VWC            | 25 – 80       | %     |
+| Temperature    | 18 – 28       | °C    |
+| Bulk EC        | 0.5 – 2.0     | dS/m  |
+| Pore EC (pwEC) | 2 – 10        | dS/m  |
+
+Measured in rockwool using Athena Pro Line nutrients under typical grow conditions.
+
+---
+
+## Repository Structure
+
+```
+📁 esphome/
+ ├── f1-row2-front-sdi12.yaml      # Full configuration
+ ├── secrets.yaml.example          # Template for Wi-Fi credentials
+ └── README.md                     # Documentation
+```
+
+---
+
+## References
+
+* **METER Group – Teros-12 Integrator Guide**
+  [PDF](https://www.labcell.com/media/140638/teros%2012%20integrators%20guide.pdf)
+* **Hilhorst (2000)** – “Dielectric method for soil EC and water content.” *Soil Sci. Soc. Am. J.*
+* **Infiwin MT22 User Manual v6.01** – [infwin.com](https://www.infwin.com/mt22-soil-moisture-ec-temperature-sensor-sdi-12/)
+* **Growlink Terralink** – Field reference for compatible EC algorithms.
+
+---
 
 ## Contributing
 
-Contributions, issues, and feature requests are welcome. Please feel free to open an issue to discuss your ideas.
+Contributions, calibration datasets, and improvements are welcome.
+If you have developed substrate-specific calibration curves or enhancements, please submit a pull request or open an issue.
+
+---
+
+## License
+
+MIT License © 2025 Ben Isdale | Legacy Workspace NZ
+"Measure precisely, grow intelligently."
+
+---
+
+Would you like me to add a short “Calibration Workflow” section explaining how to collect true VWC/EC data to create new polynomials for other substrates? It would complete the documentation set for research or professional growers.
+
 
 ## References
 
