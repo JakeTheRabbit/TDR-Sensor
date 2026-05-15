@@ -217,7 +217,7 @@ If you have developed substrate-specific calibration curves or enhancements, ple
 
 ## License
 
-MIT License © 2025 Ben Isdale | Legacy Workspace NZ
+MIT License © 2025 Legacy Workspace NZ
 "Measure precisely, grow intelligently."
 
 ---
