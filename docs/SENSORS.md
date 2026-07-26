@@ -2,6 +2,8 @@
 
 Which probes work with this project, what they cost, where to buy them, and who actually makes them. Prices are 2026 street prices in USD and they move around, so treat them as a guide not a quote.
 
+For the measurement theory behind all of this, and an honest account of what one probe can earn you, see [Root zone state estimation with the TEROS-12](https://jaketherabbit.github.io/cannabis-white-papers/root-zone-teros12.html).
+
 This node is an SDI-12 reader. It applies the METER TEROS 12 calibration maths to the raw counts coming off the probe. A sensor is a drop-in only if two things are true: it talks SDI-12, and it returns TEROS-12-style raw counts. Anything else either needs its own calibration or will not connect at all. The table in the compatibility section tells you which is which.
 
 ## Quick answer: what to buy

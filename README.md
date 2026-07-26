@@ -151,6 +151,12 @@ This is a rebuild of the earlier single-file config. What moved and why:
 - The device no longer reboots itself every fifteen minutes when no Home Assistant is connected, so it runs happily standalone on just the web page or MQTT.
 - Web page upgraded to the sorted, grouped layout and bundled so it works with no internet.
 
+## Background reading
+
+If you want the theory behind what this thing is measuring, rather than how to wire it up, read [Root zone state estimation with the TEROS-12](https://jaketherabbit.github.io/cannabis-white-papers/root-zone-teros12.html). It covers how a capacitance probe turns an electric field into a water number, why the default calibration lies a little, what pore EC can and cannot tell you, and how to steer on the shape of the dryback instead of the absolute number. It is also honest about the limits, which is worth reading before you trust any single probe, including this one.
+
+The short version, and the reason the docs here keep repeating it: one probe sees about a litre of media. It is one local witness. Calibrate it, check the contact, and cross-check it against runoff or pot weight before you act on it.
+
 ## Credits
 
 Calibration maths from the METER TEROS 11/12 manual. SDI-12 and half-duplex UART components by ssieb. Original inspiration from kromadg's soil-sensor project and the science-in-hydroponics writeups. Built by Legacy Ag.

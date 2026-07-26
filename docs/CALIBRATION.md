@@ -4,6 +4,8 @@ The sensor gives useful numbers out of the box, but a probe reading is only as g
 
 If you have never done this before, read the whole page once before you start. None of it is hard, but the order matters.
 
+This page is the procedure. For why any of it works, and what the numbers can and cannot tell you, read [Root zone state estimation with the TEROS-12](https://jaketherabbit.github.io/cannabis-white-papers/root-zone-teros12.html). It goes through the measurement physics, the accuracy you can actually expect, and why a single probe needs a second witness before you act on it.
+
 ## What you are calibrating and why
 
 - VWC (volumetric water content) is the percent of the substrate volume that is water. The raw probe reading is a capacitance number, and the firmware converts it with a polynomial. That polynomial is close for rockwool and coco, but every probe and every block is slightly different, so you correct it with a two point calibration.
