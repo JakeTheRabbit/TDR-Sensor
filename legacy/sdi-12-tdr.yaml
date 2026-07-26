@@ -11,13 +11,13 @@
 #
 #   This configuration uses both the Hilhorst and Mass-Balance
 #   models for pore EC and blends them dynamically based on
-#   water content — ensuring stable and realistic EC readings
+#   water content, ensuring stable and realistic EC readings
 #   in rockwool, coco, or peat substrates.
 #
 #   Typical substrate ranges:
-#     - Rockwool: 0–80 % VWC, 2–10 dS/m pore EC
-#     - Coco/Coir: 0–75 % VWC, 1–8 dS/m pore EC
-#     - Peat: 0–65 % VWC, 0.5–5 dS/m pore EC
+#     - Rockwool: 0-80 % VWC, 2-10 dS/m pore EC
+#     - Coco/Coir: 0-75 % VWC, 1-8 dS/m pore EC
+#     - Peat: 0-65 % VWC, 0.5-5 dS/m pore EC
 # ===================================================================
 
 esphome:
@@ -145,7 +145,7 @@ sensor:
       return inner * inner;  // Square term required per Teros-12 method
 
   # -----------------------------------------------------------------
-  # Bulk Electrical Conductivity σb (µS/cm → dS/m)
+  # Bulk Electrical Conductivity sigma-b (uS/cm to dS/m)
   # -----------------------------------------------------------------
   - platform: template
     name: "Bulk EC (σb @25°C)"
@@ -251,10 +251,10 @@ sensor:
 
 # -------------------------------------------------------------------
 # Notes:
-# - VWC calibration is based on the “soilless” polynomial from METER Group.
+# - VWC calibration is based on the "soilless" polynomial from METER Group.
 # - Pore EC blends Hilhorst and mass-balance methods automatically:
-#     < 40 % VWC → mass-balance (dry zone)
-#     40–60 % VWC → blended
-#     > 60 % VWC → Hilhorst (wet zone)
+#     < 40 % VWC to mass-balance (dry zone)
+#     40-60 % VWC to blended
+#     > 60 % VWC to Hilhorst (wet zone)
 # - Suitable for rockwool, coco, or peat; values align closely with TEROS-12.
 # -------------------------------------------------------------------

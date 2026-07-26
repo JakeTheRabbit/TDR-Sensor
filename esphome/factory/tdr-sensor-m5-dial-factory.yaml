@@ -1,0 +1,33 @@
+# Factory build for M5Stack Dial. This is what CI compiles into the
+# pre-built firmware. Ships with no WiFi credentials, provision from
+# the browser at web.esphome.io (Improv over serial) or by joining
+# the fallback hotspot.
+
+substitutions:
+  name: tdr-sensor
+  friendly_name: TDR Sensor
+  sdi12_data_pin: GPIO2
+  sdi12_address: "0"
+  sample_interval: 10s
+  timezone: Pacific/Auckland
+
+packages:
+  board: !include ../packages/boards/m5-dial.yaml
+  core: !include ../packages/tdr_sdi12_core.yaml
+  analytics: !include ../packages/tdr_analytics.yaml
+  wifi_extras: !include ../packages/wifi_extras.yaml
+
+esphome:
+  name_add_mac_suffix: true
+
+wifi:
+  ap: {}
+
+improv_serial:
+
+ota:
+  - platform: esphome
+
+dashboard_import:
+  package_import_url: github://JakeTheRabbit/TDR-Sensor/esphome/import/m5-dial.yaml@main
+  import_full_config: true

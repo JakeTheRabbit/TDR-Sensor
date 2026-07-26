@@ -1,0 +1,120 @@
+# TDR Sensor dashboard
+# -------------------------------------------------------------------
+# Paste this into a new dashboard: Settings -> Dashboards -> Add
+# dashboard -> Edit -> three dots -> Raw configuration editor.
+#
+# The entity ids below assume the device name is "tdr-sensor", which
+# gives ids like sensor.tdr_sensor_vwc. If you renamed the node,
+# find and replace tdr_sensor with your name.
+
+title: TDR Sensor
+views:
+  - title: Substrate
+    path: substrate
+    icon: mdi:water-percent
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            name: VWC
+            entity: sensor.tdr_sensor_vwc
+            unit: "%"
+            min: 0
+            max: 100
+            severity:
+              green: 45
+              yellow: 25
+              red: 0
+          - type: gauge
+            name: Pore EC
+            entity: sensor.tdr_sensor_pore_ec
+            unit: dS/m
+            min: 0
+            max: 12
+            severity:
+              green: 2
+              yellow: 8
+              red: 10
+          - type: gauge
+            name: Saturation
+            entity: sensor.tdr_sensor_saturation
+            unit: "%"
+            min: 0
+            max: 110
+
+      - type: entities
+        title: Crop steering
+        entities:
+          - entity: sensor.tdr_sensor_steering_mode
+            name: Steering mode
+          - entity: sensor.tdr_sensor_steering_confidence
+            name: Confidence
+          - entity: sensor.tdr_sensor_steering_index
+            name: Steering index
+          - entity: sensor.tdr_sensor_dryback_percent
+            name: Dryback now
+          - entity: sensor.tdr_sensor_max_dryback_today
+            name: Max dryback today
+          - entity: sensor.tdr_sensor_overnight_dryback
+            name: Overnight dryback
+          - entity: binary_sensor.tdr_sensor_irrigating
+            name: Irrigating
+
+      - type: entities
+        title: Irrigation
+        entities:
+          - entity: sensor.tdr_sensor_irrigations_today
+            name: Shots today
+          - entity: sensor.tdr_sensor_time_since_irrigation
+            name: Time since last shot
+          - entity: sensor.tdr_sensor_last_shot_size
+            name: Last shot size
+          - entity: sensor.tdr_sensor_peak_vwc
+            name: Peak VWC
+          - entity: sensor.tdr_sensor_trough_vwc
+            name: Trough VWC
+          - entity: sensor.tdr_sensor_ec_stacking
+            name: EC stacking since field capacity
+
+      - type: history-graph
+        title: VWC over time
+        hours_to_show: 48
+        entities:
+          - entity: sensor.tdr_sensor_vwc
+          - entity: sensor.tdr_sensor_peak_vwc
+          - entity: binary_sensor.tdr_sensor_irrigating
+
+      - type: history-graph
+        title: Pore EC over time
+        hours_to_show: 48
+        entities:
+          - entity: sensor.tdr_sensor_pore_ec
+          - entity: sensor.tdr_sensor_pore_ec_24h_average
+
+  - title: Calibration
+    path: calibration
+    icon: mdi:tune
+    cards:
+      - type: entities
+        title: Substrate and VWC
+        entities:
+          - entity: select.tdr_sensor_substrate_profile
+          - entity: number.tdr_sensor_field_capacity
+          - entity: number.tdr_sensor_vwc_gain
+          - entity: number.tdr_sensor_vwc_offset
+          - entity: number.tdr_sensor_saturated_reference
+          - entity: button.tdr_sensor_capture_dry_point
+          - entity: button.tdr_sensor_capture_saturated_point
+          - entity: button.tdr_sensor_apply_vwc_calibration
+          - entity: button.tdr_sensor_reset_to_substrate_defaults
+
+      - type: entities
+        title: EC
+        entities:
+          - entity: number.tdr_sensor_ec_gain
+          - entity: number.tdr_sensor_ec_offset
+          - entity: number.tdr_sensor_ec_reference_solution
+          - entity: number.tdr_sensor_hilhorst_e0
+          - entity: number.tdr_sensor_pore_ec_blend_low
+          - entity: number.tdr_sensor_pore_ec_blend_high
+          - entity: button.tdr_sensor_calibrate_ec_to_reference

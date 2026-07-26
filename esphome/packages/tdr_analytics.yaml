@@ -1,0 +1,1050 @@
+# ===================================================================
+# TDR-Sensor crop steering analytics package
+# -------------------------------------------------------------------
+# All of this runs on the ESP32. No Home Assistant needed, the
+# numbers show up on the built-in web page and over MQTT.
+#
+# Driven off every VWC sample:
+#   - Irrigation detection state machine (rise then plateau)
+#   - Peak and trough VWC, with the time each happened
+#   - Dryback since last peak, in points and in percent
+#   - Dryback rate in %/hr over a rolling 60 minute window
+#   - Daily max dryback, overnight dryback
+#   - Rolling 24h min / max / average for VWC and pore EC
+#   - Shots today, time since last irrigation, "irrigating" flag
+#   - Pore EC captured at field capacity, and EC stacking since then
+#   - Saturation percent against field capacity
+#   - Field capacity auto-learned from the 7 day peak
+#   - Sensor fault flag (reading NaN, or raw counts frozen)
+#   - Steering detection: Vegetative / Balanced / Generative, with a
+#     confidence and a numeric index for graphing
+#
+# Requires the core package (uses the vwc, pwec, field_capacity ids).
+# ===================================================================
+
+substitutions:
+  timezone: Pacific/Auckland
+
+time:
+  - platform: sntp
+    id: tdr_time
+    timezone: ${timezone}
+    on_time:
+      # Midnight rollover: push today's peak into the 7 day ring for
+      # the learned field capacity, then reset the daily counters.
+      - seconds: 0
+        minutes: 0
+        hours: 0
+        then:
+          - lambda: |-
+              id(g_fc_days).push_back(id(g_daily_peak));
+              if (id(g_fc_days).size() > 7) id(g_fc_days).erase(id(g_fc_days).begin());
+              ESP_LOGI("analytics", "Daily rollover, stored peak %.1f", id(g_daily_peak));
+              id(g_daily_peak) = 0.0f;
+              id(g_shots_today) = 0;
+              id(g_max_dryback_today) = 0.0f;
+      # Lights on / off snapshots for overnight dryback.
+      - seconds: 15
+        minutes: 0
+        hours: '*'
+        then:
+          - lambda: |-
+              int h = id(tdr_time).now().hour;
+              float v = id(vwc).state;
+              if (isnan(v)) return;
+              if (h == (int) id(lights_off_hour).state) {
+                id(g_lightsoff_vwc) = v;
+              }
+              if (h == (int) id(lights_on_hour).state && !isnan(id(g_lightsoff_vwc))) {
+                id(g_overnight_db) = id(g_lightsoff_vwc) - v;
+              }
+
+globals:
+  # 0 = drying, 1 = wetting (irrigation in progress)
+  - id: g_phase
+    type: int
+    restore_value: true
+    initial_value: '0'
+  - id: g_peak
+    type: float
+    restore_value: true
+    initial_value: 'NAN'
+  - id: g_peak_ts
+    type: int
+    restore_value: true
+    initial_value: '0'
+  - id: g_trough
+    type: float
+    restore_value: true
+    initial_value: 'NAN'
+  - id: g_trough_ts
+    type: int
+    restore_value: true
+    initial_value: '0'
+  - id: g_cand_peak
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: g_cand_peak_ts
+    type: int
+    restore_value: false
+    initial_value: '0'
+  - id: g_irr_start
+    type: float
+    restore_value: true
+    initial_value: 'NAN'
+  - id: g_last_irr_ts
+    type: int
+    restore_value: true
+    initial_value: '0'
+  - id: g_shots_today
+    type: int
+    restore_value: true
+    initial_value: '0'
+  - id: g_last_shot
+    type: float
+    restore_value: true
+    initial_value: 'NAN'
+  - id: g_max_dryback_today
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+  - id: g_daily_peak
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+  - id: g_lightsoff_vwc
+    type: float
+    restore_value: true
+    initial_value: 'NAN'
+  - id: g_overnight_db
+    type: float
+    restore_value: true
+    initial_value: 'NAN'
+  - id: g_pwec_at_fc
+    type: float
+    restore_value: true
+    initial_value: 'NAN'
+  - id: g_cycles
+    type: int
+    restore_value: true
+    initial_value: '0'
+  # Rolling 60 min ring for the dryback rate (up to 12 x 5 min). Kept
+  # as vectors because ESPHome globals cannot initialise C arrays.
+  - id: g_rate_vwc
+    type: std::vector<float>
+    restore_value: false
+  - id: g_rate_ts
+    type: std::vector<int64_t>
+    restore_value: false
+  # 7 day ring of daily peaks for the learned field capacity.
+  - id: g_fc_days
+    type: std::vector<float>
+    restore_value: false
+  # Fault detection: last raw value and when it last changed.
+  - id: g_last_raw
+    type: float
+    restore_value: false
+    initial_value: 'NAN'
+  - id: g_last_change_ts
+    type: int
+    restore_value: false
+    initial_value: '0'
+
+# -------------------------------------------------------------------
+# Sample intake and periodic samplers
+# -------------------------------------------------------------------
+sensor:
+  - platform: copy
+    source_id: vwc
+    id: vwc_stream
+    internal: true
+    on_value:
+      - script.execute:
+          id: tdr_process
+          sample: !lambda 'return x;'
+
+  # ---- Analytics outputs -------------------------------------------
+  - platform: template
+    name: "Peak VWC"
+    id: peak_vwc
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: 30s
+    state_class: measurement
+    icon: mdi:arrow-up-bold
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 10
+    filters: [ { or: [ delta: 0.05, heartbeat: 300s ] } ]
+    lambda: 'return id(g_peak);'
+
+  - platform: template
+    name: "Trough VWC"
+    id: trough_vwc
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: 30s
+    state_class: measurement
+    icon: mdi:arrow-down-bold
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 11
+    filters: [ { or: [ delta: 0.05, heartbeat: 300s ] } ]
+    lambda: 'return id(g_trough);'
+
+  - platform: template
+    name: "Dryback"
+    id: dryback_pts
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: 30s
+    state_class: measurement
+    icon: mdi:trending-down
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 12
+    filters: [ { or: [ delta: 0.05, heartbeat: 300s ] } ]
+    lambda: |-
+      float p = id(g_peak);
+      float v = id(vwc).state;
+      if (isnan(p) || isnan(v)) return NAN;
+      return p - v < 0.0f ? 0.0f : p - v;
+
+  - platform: template
+    name: "Dryback Percent"
+    id: dryback_pct
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: 30s
+    state_class: measurement
+    icon: mdi:percent
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 13
+    filters: [ { or: [ delta: 0.1, heartbeat: 300s ] } ]
+    lambda: |-
+      float p = id(g_peak);
+      float v = id(vwc).state;
+      if (isnan(p) || isnan(v) || p < 1.0f) return NAN;
+      float db = (p - v) / p * 100.0f;
+      return db < 0.0f ? 0.0f : db;
+
+  - platform: template
+    name: "Dryback Rate"
+    id: dryback_rate
+    unit_of_measurement: "%/h"
+    accuracy_decimals: 2
+    update_interval: 60s
+    state_class: measurement
+    icon: mdi:speedometer
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 14
+    filters: [ { or: [ delta: 0.02, heartbeat: 300s ] } ]
+    lambda: |-
+      // Slope across the rolling 60 min buffer. Positive means the
+      // substrate is losing water. Samples are pushed oldest-first.
+      if (id(g_phase) != 0) return NAN;
+      size_t n = id(g_rate_vwc).size();
+      if (n < 2) return NAN;
+      float v_old = id(g_rate_vwc).front();
+      float v_new = id(g_rate_vwc).back();
+      float hours = (id(g_rate_ts).back() - id(g_rate_ts).front()) / 3600.0f;
+      if (hours < 0.15f) return NAN;
+      float rate = (v_old - v_new) / hours;
+      return rate < 0.0f ? 0.0f : rate;
+
+  - platform: template
+    name: "Time Since Irrigation"
+    id: time_since_irr
+    unit_of_measurement: "min"
+    device_class: duration
+    accuracy_decimals: 0
+    update_interval: 30s
+    state_class: measurement
+    icon: mdi:timer-outline
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 15
+    lambda: |-
+      if (id(g_last_irr_ts) == 0) return NAN;
+      auto now_t = id(tdr_time).now();
+      if (!now_t.is_valid()) return NAN;
+      return (now_t.timestamp - id(g_last_irr_ts)) / 60.0f;
+
+  - platform: template
+    name: "Irrigations Today"
+    id: irrigations_today
+    accuracy_decimals: 0
+    update_interval: 30s
+    state_class: total_increasing
+    icon: mdi:sprinkler
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 16
+    filters: [ { or: [ delta: 0.5, heartbeat: 300s ] } ]
+    lambda: 'return id(g_shots_today);'
+
+  - platform: template
+    name: "Last Shot Size"
+    id: last_shot_size
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: 30s
+    state_class: measurement
+    icon: mdi:cup-water
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 17
+    filters: [ { or: [ delta: 0.05, heartbeat: 300s ] } ]
+    lambda: 'return id(g_last_shot);'
+
+  - platform: template
+    name: "Max Dryback Today"
+    id: max_dryback_today
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: 60s
+    state_class: measurement
+    icon: mdi:arrow-expand-down
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 18
+    filters: [ { or: [ delta: 0.05, heartbeat: 300s ] } ]
+    lambda: 'return id(g_max_dryback_today) > 0.0f ? id(g_max_dryback_today) : NAN;'
+
+  - platform: template
+    name: "Overnight Dryback"
+    id: overnight_dryback
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: 60s
+    state_class: measurement
+    icon: mdi:weather-night
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 19
+    filters: [ { or: [ delta: 0.05, heartbeat: 300s ] } ]
+    lambda: 'return id(g_overnight_db);'
+
+  - platform: template
+    name: "Saturation"
+    id: saturation_pct
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    update_interval: 30s
+    state_class: measurement
+    icon: mdi:water-percent-alert
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 20
+    filters: [ { or: [ delta: 0.5, heartbeat: 300s ] } ]
+    lambda: |-
+      float v = id(vwc).state;
+      float fc = id(field_capacity).state;
+      if (isnan(v) || fc < 1.0f) return NAN;
+      float s = v / fc * 100.0f;
+      if (s < 0.0f) s = 0.0f;
+      if (s > 120.0f) s = 120.0f;
+      return s;
+
+  - platform: template
+    name: "Field Capacity (learned)"
+    id: fc_learned
+    unit_of_measurement: "%"
+    accuracy_decimals: 1
+    update_interval: 300s
+    state_class: measurement
+    icon: mdi:school
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 21
+    lambda: |-
+      float mx = id(g_daily_peak);
+      for (float d : id(g_fc_days)) if (d > mx) mx = d;
+      return mx > 1.0f ? mx : NAN;
+
+  - platform: template
+    name: "Pore EC at Field Capacity"
+    id: pwec_at_fc
+    unit_of_measurement: "dS/m"
+    accuracy_decimals: 2
+    update_interval: 60s
+    state_class: measurement
+    icon: mdi:water-opacity
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 22
+    filters: [ { or: [ delta: 0.02, heartbeat: 300s ] } ]
+    lambda: 'return id(g_pwec_at_fc);'
+
+  - platform: template
+    name: "EC Stacking"
+    id: ec_stacking
+    unit_of_measurement: "dS/m"
+    accuracy_decimals: 2
+    update_interval: 60s
+    state_class: measurement
+    icon: mdi:layers-plus
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 23
+    filters: [ { or: [ delta: 0.02, heartbeat: 300s ] } ]
+    lambda: |-
+      float now = id(pwec).state;
+      float fc = id(g_pwec_at_fc);
+      if (isnan(now) || isnan(fc)) return NAN;
+      return now - fc;
+
+  # ---- Rolling 24h stats via built-in filters ----------------------
+  - platform: copy
+    source_id: vwc
+    name: "VWC 24h Min"
+    id: vwc_24h_min
+    icon: mdi:arrow-collapse-down
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 30
+    filters:
+      - throttle_average: 300s
+      - min:
+          window_size: 288
+          send_every: 6
+          send_first_at: 1
+
+  - platform: copy
+    source_id: vwc
+    name: "VWC 24h Max"
+    id: vwc_24h_max
+    icon: mdi:arrow-collapse-up
+    accuracy_decimals: 1
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 31
+    filters:
+      - throttle_average: 300s
+      - max:
+          window_size: 288
+          send_every: 6
+          send_first_at: 1
+
+  - platform: copy
+    source_id: vwc
+    name: "VWC 24h Average"
+    id: vwc_24h_avg
+    icon: mdi:chart-timeline-variant
+    accuracy_decimals: 1
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 32
+    filters:
+      - throttle_average: 300s
+      - sliding_window_moving_average:
+          window_size: 288
+          send_every: 6
+          send_first_at: 1
+
+  - platform: copy
+    source_id: pwec
+    name: "Pore EC 24h Min"
+    id: pwec_24h_min
+    unit_of_measurement: "dS/m"
+    icon: mdi:arrow-collapse-down
+    accuracy_decimals: 2
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 33
+    filters:
+      - throttle_average: 300s
+      - min:
+          window_size: 288
+          send_every: 6
+          send_first_at: 1
+
+  - platform: copy
+    source_id: pwec
+    name: "Pore EC 24h Max"
+    id: pwec_24h_max
+    unit_of_measurement: "dS/m"
+    icon: mdi:arrow-collapse-up
+    accuracy_decimals: 2
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 34
+    filters:
+      - throttle_average: 300s
+      - max:
+          window_size: 288
+          send_every: 6
+          send_first_at: 1
+
+  - platform: copy
+    source_id: pwec
+    name: "Pore EC 24h Average"
+    id: pwec_24h_avg
+    unit_of_measurement: "dS/m"
+    icon: mdi:chart-timeline-variant
+    accuracy_decimals: 2
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 35
+    filters:
+      - throttle_average: 300s
+      - sliding_window_moving_average:
+          window_size: 288
+          send_every: 6
+          send_first_at: 1
+
+  # ---- Steering detection ------------------------------------------
+  - platform: template
+    name: "Steering Index"
+    id: steering_index
+    accuracy_decimals: 2
+    update_interval: 60s
+    state_class: measurement
+    icon: mdi:swap-vertical-bold
+    web_server:
+      sorting_group_id: sg_steering
+      sorting_weight: 10
+    filters: [ { or: [ delta: 0.01, heartbeat: 300s ] } ]
+    lambda: |-
+      // Four signals, each mapped to -1 (vegetative) .. +1
+      // (generative), then weighted. Anchors are user settable.
+      if (id(g_cycles) < 3) return NAN;
+
+      // Maps lo -> -1, hi -> +1, clamped.
+      auto mr = [](float x, float lo, float hi) -> float {
+        if (hi == lo) return 0.0f;
+        float t = 2.0f * (x - lo) / (hi - lo) - 1.0f;
+        if (t < -1.0f) t = -1.0f;
+        if (t > 1.0f) t = 1.0f;
+        return t;
+      };
+
+      // 1) Dryback magnitude (bigger = generative)
+      float db = id(g_max_dryback_today);
+      if (db <= 0.0f) db = isnan(id(g_last_shot)) ? 0.0f : id(g_last_shot);
+      float s_db = mr(db, id(steer_dryback_veg).state, id(steer_dryback_gen).state);
+
+      // 2) Shots per day (fewer = generative)
+      float shots = id(g_shots_today);
+      float s_shots = -mr(shots, id(steer_shots_gen).state, id(steer_shots_veg).state);
+
+      // 3) EC stacking through the day (more = generative)
+      float s_ec = 0.0f;
+      if (!isnan(id(pwec).state) && !isnan(id(g_pwec_at_fc)))
+        s_ec = mr(id(pwec).state - id(g_pwec_at_fc), 0.0f, 3.0f);
+
+      // 4) Average VWC vs field capacity headroom (drier = generative)
+      float avg = id(vwc_24h_avg).state;
+      float fc = id(field_capacity).state;
+      float s_head = 0.0f;
+      if (!isnan(avg) && fc > 1.0f) {
+        float headroom = (fc - avg) / fc;  // 0 = full, larger = drier
+        s_head = mr(headroom, 0.05f, 0.35f);
+      }
+
+      float idx = 0.40f * s_db + 0.30f * s_shots + 0.15f * s_ec + 0.15f * s_head;
+      if (idx < -1.0f) idx = -1.0f;
+      if (idx > 1.0f) idx = 1.0f;
+      return idx;
+
+  - platform: template
+    name: "Steering Confidence"
+    id: steering_confidence
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    update_interval: 60s
+    state_class: measurement
+    icon: mdi:gauge
+    web_server:
+      sorting_group_id: sg_steering
+      sorting_weight: 11
+    filters: [ { or: [ delta: 1.0, heartbeat: 300s ] } ]
+    lambda: |-
+      float idx = id(steering_index).state;
+      if (isnan(idx)) return NAN;
+      float c = fabsf(idx) / 0.66f * 100.0f;
+      if (c > 100.0f) c = 100.0f;
+      return c;
+
+binary_sensor:
+  - platform: template
+    name: "Irrigating"
+    id: irrigating
+    device_class: running
+    icon: mdi:water-pump
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 40
+    lambda: 'return id(g_phase) == 1;'
+
+  - platform: template
+    name: "Dryback Target Reached"
+    id: dryback_target_reached
+    icon: mdi:flag-checkered
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 41
+    lambda: |-
+      float p = id(g_peak);
+      float v = id(vwc).state;
+      if (isnan(p) || isnan(v)) return false;
+      return (p - v) >= id(target_dryback).state;
+
+  - platform: template
+    name: "Sensor Fault"
+    id: sensor_fault
+    device_class: problem
+    icon: mdi:alert-circle
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 15
+    lambda: |-
+      if (isnan(id(raw_counts).state)) return true;
+      auto now_t = id(tdr_time).now();
+      if (!now_t.is_valid() || id(g_last_change_ts) == 0) return false;
+      float mins = (now_t.timestamp - id(g_last_change_ts)) / 60.0f;
+      return mins >= id(fault_freeze_min).state;
+
+text_sensor:
+  - platform: template
+    name: "Steering Mode"
+    id: steering_mode
+    update_interval: 60s
+    icon: mdi:sprout
+    web_server:
+      sorting_group_id: sg_steering
+      sorting_weight: 5
+    lambda: |-
+      if (id(g_cycles) < 3) return {"Learning"};
+      float idx = id(steering_index).state;
+      if (isnan(idx)) return {"Learning"};
+      if (idx >= id(steer_gen_threshold).state) return {"Generative"};
+      if (idx <= id(steer_veg_threshold).state) return {"Vegetative"};
+      return {"Balanced"};
+
+  - platform: template
+    name: "Peak Time"
+    id: peak_time
+    update_interval: 60s
+    icon: mdi:clock-time-four
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 50
+    lambda: |-
+      if (id(g_peak_ts) == 0) return {"--:--"};
+      return {ESPTime::from_epoch_local(id(g_peak_ts)).strftime("%H:%M")};
+
+  - platform: template
+    name: "Trough Time"
+    id: trough_time
+    update_interval: 60s
+    icon: mdi:clock-time-ten
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_analytics
+      sorting_weight: 51
+    lambda: |-
+      if (id(g_trough_ts) == 0) return {"--:--"};
+      return {ESPTime::from_epoch_local(id(g_trough_ts)).strftime("%H:%M")};
+
+# -------------------------------------------------------------------
+# Periodic samplers
+# -------------------------------------------------------------------
+interval:
+  # Push a sample into the dryback-rate ring every 5 minutes.
+  - interval: 300s
+    then:
+      - lambda: |-
+          auto now_t = id(tdr_time).now();
+          if (!now_t.is_valid()) return;
+          float v = id(vwc).state;
+          if (isnan(v)) return;
+          // Keep the last 12 samples, oldest at the front.
+          id(g_rate_vwc).push_back(v);
+          id(g_rate_ts).push_back((int64_t) now_t.timestamp);
+          while (id(g_rate_vwc).size() > 12) {
+            id(g_rate_vwc).erase(id(g_rate_vwc).begin());
+            id(g_rate_ts).erase(id(g_rate_ts).begin());
+          }
+
+# -------------------------------------------------------------------
+# The irrigation and dryback engine. Runs on every VWC sample.
+# -------------------------------------------------------------------
+script:
+  - id: tdr_process
+    mode: single
+    parameters:
+      sample: float
+    then:
+      - lambda: |-
+          float v = sample;
+          auto now_t = id(tdr_time).now();
+          if (!now_t.is_valid()) return;  // wait for time sync
+          time_t now = now_t.timestamp;
+
+          // ---- Fault tracking (raw counts frozen or NaN) ----
+          float raw = id(raw_counts).state;
+          if (!isnan(raw)) {
+            if (isnan(id(g_last_raw)) || fabsf(raw - id(g_last_raw)) > 0.5f) {
+              id(g_last_raw) = raw;
+              id(g_last_change_ts) = now;
+            }
+          }
+          if (isnan(v)) return;
+
+          float rise      = id(rise_threshold).state;
+          float fall      = id(fall_confirm).state;
+          float confirm_s = id(peak_confirm_min).state * 60.0f;
+          float window_s  = id(irr_window_min).state * 60.0f;
+
+          if (id(g_phase) == 0) {
+            // ---- DRYING ----
+            if (isnan(id(g_trough)) || v <= id(g_trough)) {
+              id(g_trough) = v;
+              id(g_trough_ts) = now;
+            }
+            if (!isnan(id(g_peak))) {
+              float db = id(g_peak) - v;
+              if (db > id(g_max_dryback_today)) id(g_max_dryback_today) = db;
+            }
+            if (!isnan(id(g_trough)) && (v - id(g_trough)) >= rise) {
+              if ((now - id(g_trough_ts)) > (time_t) window_s) {
+                // Rise too slow to be a shot, re-anchor and keep drying.
+                id(g_trough) = v;
+                id(g_trough_ts) = now;
+              } else {
+                // ---- Irrigation detected ----
+                id(g_phase) = 1;
+                id(g_irr_start) = id(g_trough);
+                id(g_cand_peak) = v;
+                id(g_cand_peak_ts) = now;
+                if (id(g_last_irr_ts) > 0) {
+                  float iv = (now - id(g_last_irr_ts)) / 60.0f;
+                  (void) iv;
+                }
+                id(g_last_irr_ts) = now;
+                id(g_shots_today) += 1;
+                id(g_cycles) += 1;
+                ESP_LOGI("analytics", "Irrigation at VWC %.1f (trough %.1f)", v, id(g_irr_start));
+              }
+            }
+          } else {
+            // ---- WETTING ----
+            if (isnan(id(g_cand_peak)) || v >= id(g_cand_peak)) {
+              id(g_cand_peak) = v;
+              id(g_cand_peak_ts) = now;
+            }
+            bool fell  = (id(g_cand_peak) - v) >= fall;
+            bool timed = (now - id(g_cand_peak_ts)) >= (time_t) confirm_s;
+            if (fell || timed) {
+              // ---- Peak confirmed (plateau reached) ----
+              id(g_peak) = id(g_cand_peak);
+              id(g_peak_ts) = id(g_cand_peak_ts);
+              if (id(g_peak) > id(g_daily_peak)) id(g_daily_peak) = id(g_peak);
+              if (!isnan(id(g_irr_start))) {
+                float shot = id(g_peak) - id(g_irr_start);
+                if (shot > 0.0f) id(g_last_shot) = shot;
+              }
+              // Capture pore EC at the top of the shot as the field
+              // capacity baseline for EC stacking.
+              float ecnow = id(pwec).state;
+              if (!isnan(ecnow)) id(g_pwec_at_fc) = ecnow;
+              id(g_phase) = 0;
+              id(g_trough) = v;
+              id(g_trough_ts) = now;
+              id(g_cand_peak) = NAN;
+              ESP_LOGI("analytics", "Peak %.1f, shot %.1f", id(g_peak), id(g_last_shot));
+            }
+          }
+
+# -------------------------------------------------------------------
+# Tuning knobs
+# -------------------------------------------------------------------
+number:
+  - platform: template
+    name: "Rise Threshold"
+    id: rise_threshold
+    optimistic: true
+    restore_value: true
+    initial_value: 1.5
+    min_value: 0.3
+    max_value: 10.0
+    step: 0.1
+    mode: box
+    unit_of_measurement: "%"
+    entity_category: config
+    icon: mdi:arrow-top-right
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 10
+
+  - platform: template
+    name: "Plateau Confirm Drop"
+    id: fall_confirm
+    optimistic: true
+    restore_value: true
+    initial_value: 0.8
+    min_value: 0.1
+    max_value: 5.0
+    step: 0.1
+    mode: box
+    unit_of_measurement: "%"
+    entity_category: config
+    icon: mdi:arrow-bottom-right
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 11
+
+  - platform: template
+    name: "Plateau Confirm Time"
+    id: peak_confirm_min
+    optimistic: true
+    restore_value: true
+    initial_value: 10.0
+    min_value: 2.0
+    max_value: 60.0
+    step: 1.0
+    mode: box
+    unit_of_measurement: "min"
+    entity_category: config
+    icon: mdi:timer-check-outline
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 12
+
+  - platform: template
+    name: "Irrigation Rise Window"
+    id: irr_window_min
+    optimistic: true
+    restore_value: true
+    initial_value: 20.0
+    min_value: 5.0
+    max_value: 120.0
+    step: 1.0
+    mode: box
+    unit_of_measurement: "min"
+    entity_category: config
+    icon: mdi:timer-sand-complete
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 13
+
+  - platform: template
+    name: "Dryback Target"
+    id: target_dryback
+    optimistic: true
+    restore_value: true
+    initial_value: 15.0
+    min_value: 3.0
+    max_value: 40.0
+    step: 0.5
+    mode: box
+    unit_of_measurement: "%"
+    entity_category: config
+    icon: mdi:target
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 14
+
+  - platform: template
+    name: "Lights On Hour"
+    id: lights_on_hour
+    optimistic: true
+    restore_value: true
+    initial_value: 6
+    min_value: 0
+    max_value: 23
+    step: 1
+    mode: box
+    unit_of_measurement: "h"
+    entity_category: config
+    icon: mdi:weather-sunny
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 15
+
+  - platform: template
+    name: "Lights Off Hour"
+    id: lights_off_hour
+    optimistic: true
+    restore_value: true
+    initial_value: 18
+    min_value: 0
+    max_value: 23
+    step: 1
+    mode: box
+    unit_of_measurement: "h"
+    entity_category: config
+    icon: mdi:weather-night
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 16
+
+  - platform: template
+    name: "Fault Freeze Minutes"
+    id: fault_freeze_min
+    optimistic: true
+    restore_value: true
+    initial_value: 15.0
+    min_value: 2.0
+    max_value: 120.0
+    step: 1.0
+    mode: box
+    unit_of_measurement: "min"
+    entity_category: config
+    icon: mdi:timer-alert
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 17
+
+  # ---- Steering thresholds and anchors -----------------------------
+  - platform: template
+    name: "Steering Gen Threshold"
+    id: steer_gen_threshold
+    optimistic: true
+    restore_value: true
+    initial_value: 0.33
+    min_value: 0.05
+    max_value: 0.9
+    step: 0.01
+    mode: box
+    entity_category: config
+    icon: mdi:sprout
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 20
+
+  - platform: template
+    name: "Steering Veg Threshold"
+    id: steer_veg_threshold
+    optimistic: true
+    restore_value: true
+    initial_value: -0.33
+    min_value: -0.9
+    max_value: -0.05
+    step: 0.01
+    mode: box
+    entity_category: config
+    icon: mdi:leaf
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 21
+
+  - platform: template
+    name: "Steer Dryback Veg Anchor"
+    id: steer_dryback_veg
+    optimistic: true
+    restore_value: true
+    initial_value: 6.0
+    min_value: 1.0
+    max_value: 20.0
+    step: 0.5
+    mode: box
+    unit_of_measurement: "%"
+    entity_category: config
+    icon: mdi:leaf
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 22
+
+  - platform: template
+    name: "Steer Dryback Gen Anchor"
+    id: steer_dryback_gen
+    optimistic: true
+    restore_value: true
+    initial_value: 15.0
+    min_value: 5.0
+    max_value: 40.0
+    step: 0.5
+    mode: box
+    unit_of_measurement: "%"
+    entity_category: config
+    icon: mdi:sprout
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 23
+
+  - platform: template
+    name: "Steer Shots Gen Anchor"
+    id: steer_shots_gen
+    optimistic: true
+    restore_value: true
+    initial_value: 4.0
+    min_value: 1.0
+    max_value: 20.0
+    step: 1.0
+    entity_category: config
+    icon: mdi:sprout
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 24
+
+  - platform: template
+    name: "Steer Shots Veg Anchor"
+    id: steer_shots_veg
+    optimistic: true
+    restore_value: true
+    initial_value: 10.0
+    min_value: 2.0
+    max_value: 40.0
+    step: 1.0
+    entity_category: config
+    icon: mdi:leaf
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 25
+
+button:
+  - platform: template
+    name: "Reset Analytics"
+    id: btn_reset_analytics
+    entity_category: config
+    icon: mdi:restore-alert
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 30
+    on_press:
+      - lambda: |-
+          id(g_phase) = 0;
+          id(g_peak) = NAN; id(g_peak_ts) = 0;
+          id(g_trough) = NAN; id(g_trough_ts) = 0;
+          id(g_cand_peak) = NAN; id(g_cand_peak_ts) = 0;
+          id(g_irr_start) = NAN;
+          id(g_last_irr_ts) = 0;
+          id(g_last_shot) = NAN;
+          id(g_max_dryback_today) = 0.0f;
+          id(g_daily_peak) = 0.0f;
+          id(g_lightsoff_vwc) = NAN;
+          id(g_overnight_db) = NAN;
+          id(g_pwec_at_fc) = NAN;
+          id(g_cycles) = 0;
+          id(g_shots_today) = 0;
+          id(g_rate_vwc).clear();
+          id(g_rate_ts).clear();
+          id(g_fc_days).clear();
+          ESP_LOGI("analytics", "Analytics fully reset");
+
+  - platform: template
+    name: "Reset Daily Counters"
+    id: btn_reset_daily
+    entity_category: config
+    icon: mdi:counter
+    web_server:
+      sorting_group_id: sg_tuning
+      sorting_weight: 31
+    on_press:
+      - lambda: |-
+          id(g_shots_today) = 0;
+          id(g_max_dryback_today) = 0.0f;
+          ESP_LOGI("analytics", "Daily counters reset");

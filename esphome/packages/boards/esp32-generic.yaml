@@ -1,0 +1,24 @@
+# Generic ESP32 board package
+# For any plain ESP32 dev board (ESP32, WROOM, WROVER, DevKitC). Set
+# the exact board and the SDI-12 data pin in your device file:
+#
+#   substitutions:
+#     board: esp32dev        # or nodemcu-32s, esp-wrover-kit, etc.
+#     sdi12_data_pin: GPIO16
+#
+# No onboard LED is assumed since generic boards differ. The blue
+# status_led below tracks connection state on GPIO2, which exists on
+# every ESP32. Change or remove it if your board uses a different pin.
+
+substitutions:
+  board: esp32dev
+
+esp32:
+  board: ${board}
+  framework:
+    type: esp-idf
+
+status_led:
+  pin:
+    number: GPIO2
+    ignore_strapping_warning: true

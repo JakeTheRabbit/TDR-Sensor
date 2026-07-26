@@ -1,0 +1,31 @@
+# ===================================================================
+# TDR Sensor on M5Stack Atom Lite + AtomPoE base (wired ethernet)
+# -------------------------------------------------------------------
+# One cable does power and data. Probe data wire on G26 (the Grove
+# port passes through the PoE base), 5V on Grove red, GND on Grove
+# black. No WiFi credentials needed, it grabs an address over DHCP.
+# ===================================================================
+
+substitutions:
+  name: tdr-sensor
+  friendly_name: TDR Sensor
+  sdi12_data_pin: GPIO26
+  sdi12_address: "0"
+  sample_interval: 10s
+  timezone: Pacific/Auckland
+
+packages:
+  board: !include packages/boards/atom-poe.yaml
+  core: !include packages/tdr_sdi12_core.yaml
+  analytics: !include packages/tdr_analytics.yaml
+  # MQTT for Mycodo, Node-RED, Grafana etc. Add the broker details
+  # to secrets.yaml, then uncomment:
+  # mqtt: !include packages/tdr_mqtt.yaml
+
+ota:
+  - platform: esphome
+
+# To lock down the Home Assistant connection, add an encryption key:
+# api:
+#   encryption:
+#     key: "GENERATE_ONE_AT_esphome.io/components/api"

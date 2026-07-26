@@ -1,0 +1,42 @@
+# ===================================================================
+# TDR Sensor on M5Stack Atom Lite (WiFi)
+# -------------------------------------------------------------------
+# Probe data wire on G26 (Grove yellow), 5V on Grove red, GND on
+# Grove black. Full wiring and setup in the repo README.
+#
+# Needs secrets.yaml next to this file:
+#   wifi_ssid: "YourNetwork"
+#   wifi_password: "YourPassword"
+# ===================================================================
+
+substitutions:
+  name: tdr-sensor
+  friendly_name: TDR Sensor
+  sdi12_data_pin: GPIO26
+  sdi12_address: "0"
+  sample_interval: 10s
+  timezone: Pacific/Auckland
+
+packages:
+  board: !include packages/boards/atom-lite.yaml
+  core: !include packages/tdr_sdi12_core.yaml
+  analytics: !include packages/tdr_analytics.yaml
+  wifi_extras: !include packages/wifi_extras.yaml
+  # MQTT for Mycodo, Node-RED, Grafana etc. Add the broker details
+  # to secrets.yaml, then uncomment:
+  # mqtt: !include packages/tdr_mqtt.yaml
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # Fallback hotspot if WiFi drops. Connect to it and open
+  # http://192.168.4.1 to fix the credentials.
+  ap: {}
+
+ota:
+  - platform: esphome
+
+# To lock down the Home Assistant connection, add an encryption key:
+# api:
+#   encryption:
+#     key: "GENERATE_ONE_AT_esphome.io/components/api"

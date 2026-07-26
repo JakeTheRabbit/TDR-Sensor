@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" font-family="Segoe UI, Roboto, sans-serif">
+  <rect width="720" height="360" rx="14" fill="#1b2430"/>
+  <text x="30" y="44" fill="#e8efe9" font-size="22" font-weight="700">M5Stack Atom PoE wiring</text>
+  <text x="30" y="68" fill="#9fb0a4" font-size="14">Ethernet cable does power and data. Probe still goes on the Grove port (G26 passes through).</text>
+
+  <rect x="40" y="110" width="210" height="180" rx="12" fill="#4a3f6b" stroke="#6a5c9a"/>
+  <text x="145" y="146" fill="#ffffff" font-size="16" font-weight="700" text-anchor="middle">Atom Lite</text>
+  <text x="145" y="166" fill="#d8cfec" font-size="12" text-anchor="middle">+ AtomPoE base</text>
+  <rect x="40" y="250" width="210" height="30" rx="6" fill="#14251c"/>
+  <text x="145" y="270" fill="#8fbf9a" font-size="12" text-anchor="middle">RJ45 PoE in (power + network)</text>
+  <rect x="250" y="150" width="16" height="90" rx="3" fill="#14251c"/>
+  <circle cx="258" cy="168" r="5" fill="#e23b3b"/>
+  <circle cx="258" cy="195" r="5" fill="#e5c84f"/>
+  <circle cx="258" cy="222" r="5" fill="#b9a06a"/>
+
+  <rect x="500" y="120" width="180" height="150" rx="12" fill="#17201b" stroke="#26332b"/>
+  <text x="590" y="150" fill="#e8efe9" font-size="15" font-weight="700" text-anchor="middle">SDI-12 probe</text>
+  <text x="590" y="170" fill="#9fb0a4" font-size="12" text-anchor="middle">MT22 / TEROS 12</text>
+  <circle cx="500" cy="195" r="5" fill="#f2f2f2"/>
+  <circle cx="500" cy="218" r="5" fill="#e23b3b"/>
+  <circle cx="500" cy="241" r="5" fill="#b9a06a"/>
+
+  <path d="M258 168 C 360 168, 400 218, 500 218" stroke="#e23b3b" stroke-width="4" fill="none"/>
+  <path d="M266 195 C 360 195, 400 195, 500 195" stroke="#f2f2f2" stroke-width="4" fill="none"/>
+  <path d="M258 222 C 360 222, 400 241, 500 241" stroke="#b9a06a" stroke-width="4" fill="none"/>
+
+  <text x="300" y="305" fill="#e8efe9" font-size="13" font-weight="700">G26</text>
+  <text x="300" y="322" fill="#9fb0a4" font-size="12">Data (red)</text>
+  <text x="410" y="305" fill="#e8efe9" font-size="13" font-weight="700">5V</text>
+  <text x="410" y="322" fill="#9fb0a4" font-size="12">Power (white)</text>
+  <text x="520" y="305" fill="#e8efe9" font-size="13" font-weight="700">GND</text>
+  <text x="520" y="322" fill="#9fb0a4" font-size="12">Ground (bare)</text>
+
+  <text x="30" y="348" fill="#9fb0a4" font-size="12">No WiFi setup needed. The board gets an address over DHCP.</text>
+</svg>

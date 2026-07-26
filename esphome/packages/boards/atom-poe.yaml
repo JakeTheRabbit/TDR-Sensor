@@ -1,0 +1,86 @@
+# M5Stack Atom Lite + AtomPoE base (W5500 ethernet) board package
+# Wired ethernet with PoE power, no WiFi config needed. The Grove
+# port on the PoE base passes through G26/G32 so the probe wiring is
+# the same as a bare Atom Lite.
+# LED colours: blue = irrigating, green = drying, orange = target hit.
+
+esp32:
+  board: m5stack-atom
+  framework:
+    type: esp-idf
+
+ethernet:
+  type: W5500
+  clk_pin: GPIO22
+  mosi_pin: GPIO33
+  miso_pin: GPIO23
+  cs_pin: GPIO19
+  clock_speed: 20MHz
+
+text_sensor:
+  - platform: ethernet_info
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+      web_server:
+        sorting_group_id: sg_diag
+        sorting_weight: 71
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: atom_led
+    name: "Status LED"
+    internal: true
+    pin: GPIO27
+    num_leds: 1
+    chipset: SK6812
+    rgb_order: GRB
+    default_transition_length: 300ms
+
+switch:
+  - platform: template
+    name: "Status LED Enable"
+    id: led_enable
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    icon: mdi:led-on
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 80
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO39
+      inverted: true
+    id: atom_button
+    internal: true
+    on_click:
+      - min_length: 50ms
+        max_length: 1s
+        then:
+          - switch.toggle: led_enable
+
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          if (!id(led_enable).state) {
+            id(atom_led).turn_off().perform();
+            return;
+          }
+          float r = 0.0f, g = 0.0f, b = 0.0f;
+          if (id(g_phase) == 1) {
+            b = 1.0f;
+          } else {
+            float p = id(g_peak);
+            float v = id(vwc).state;
+            bool over = !isnan(p) && !isnan(v) && (p - v) >= id(target_dryback).state;
+            if (over) { r = 1.0f; g = 0.35f; }
+            else      { g = 1.0f; }
+          }
+          auto call = id(atom_led).turn_on();
+          call.set_brightness(0.25f);
+          call.set_rgb(r, g, b);
+          call.perform();

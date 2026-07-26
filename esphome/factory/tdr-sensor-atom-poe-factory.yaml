@@ -1,0 +1,26 @@
+# Factory build for M5Stack Atom PoE. This is what CI compiles into
+# the pre-built firmware on the Releases page. No provisioning
+# needed, plug in the ethernet cable and it comes up on DHCP.
+
+substitutions:
+  name: tdr-sensor
+  friendly_name: TDR Sensor
+  sdi12_data_pin: GPIO26
+  sdi12_address: "0"
+  sample_interval: 10s
+  timezone: Pacific/Auckland
+
+packages:
+  board: !include ../packages/boards/atom-poe.yaml
+  core: !include ../packages/tdr_sdi12_core.yaml
+  analytics: !include ../packages/tdr_analytics.yaml
+
+esphome:
+  name_add_mac_suffix: true
+
+ota:
+  - platform: esphome
+
+dashboard_import:
+  package_import_url: github://JakeTheRabbit/TDR-Sensor/esphome/import/atom-poe.yaml@main
+  import_full_config: true

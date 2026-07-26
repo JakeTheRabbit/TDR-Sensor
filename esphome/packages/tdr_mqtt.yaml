@@ -1,0 +1,23 @@
+# Optional MQTT package
+# -------------------------------------------------------------------
+# Publishes every sensor over MQTT with Home Assistant discovery,
+# and works fine alongside Mycodo, Node-RED, Grafana via Telegraf,
+# or anything else that speaks MQTT.
+#
+# To enable: uncomment the mqtt package line in your device file and
+# add these to secrets.yaml:
+#
+#   mqtt_broker: "192.168.1.10"
+#   mqtt_username: "mqtt"
+#   mqtt_password: "password"
+#
+# Topics land under <name>/sensor/<sensor_name>/state, for example
+# tdr-sensor/sensor/vwc/state. The native API stays enabled, running
+# both at once is fine.
+
+mqtt:
+  broker: !secret mqtt_broker
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+  discovery: true
+  discovery_retain: true

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 460" font-family="Segoe UI, Roboto, sans-serif">
+  <rect width="760" height="460" rx="14" fill="#1b2430"/>
+  <text x="30" y="46" fill="#e8efe9" font-size="24" font-weight="700">Sensor wire colours</text>
+  <text x="30" y="72" fill="#9fb0a4" font-size="15">Colour codes are not the same between brands. Check the sensor, do not wire by habit.</text>
+
+  <!-- MT22 -->
+  <rect x="30" y="96" width="220" height="300" rx="10" fill="#17201b" stroke="#26332b"/>
+  <text x="140" y="126" fill="#e8efe9" font-size="17" font-weight="700" text-anchor="middle">Infiwin MT22</text>
+  <line x1="60" y1="170" x2="120" y2="170" stroke="#e23b3b" stroke-width="9" stroke-linecap="round"/>
+  <text x="132" y="167" fill="#e8efe9" font-size="14" font-weight="700">RED</text>
+  <text x="132" y="184" fill="#9fb0a4" font-size="13">Data (SDI-12)</text>
+  <line x1="60" y1="230" x2="120" y2="230" stroke="#f2f2f2" stroke-width="9" stroke-linecap="round"/>
+  <text x="132" y="227" fill="#e8efe9" font-size="14" font-weight="700">WHITE</text>
+  <text x="132" y="244" fill="#9fb0a4" font-size="13">Power (5V)</text>
+  <line x1="60" y1="290" x2="120" y2="290" stroke="#b9a06a" stroke-width="9" stroke-linecap="round"/>
+  <text x="132" y="287" fill="#e8efe9" font-size="14" font-weight="700">BARE</text>
+  <text x="132" y="304" fill="#9fb0a4" font-size="13">Ground</text>
+  <rect x="48" y="330" width="184" height="50" rx="7" fill="#2a1616" stroke="#e23b3b"/>
+  <text x="140" y="351" fill="#ffb4a2" font-size="12.5" text-anchor="middle" font-weight="700">Red is DATA, not power.</text>
+  <text x="140" y="369" fill="#ffb4a2" font-size="12.5" text-anchor="middle">Do not put 5V on red.</text>
+
+  <!-- TEROS 12 -->
+  <rect x="270" y="96" width="220" height="300" rx="10" fill="#17201b" stroke="#26332b"/>
+  <text x="380" y="126" fill="#e8efe9" font-size="17" font-weight="700" text-anchor="middle">METER TEROS 12</text>
+  <line x1="300" y1="170" x2="360" y2="170" stroke="#e08a2b" stroke-width="9" stroke-linecap="round"/>
+  <text x="372" y="167" fill="#e8efe9" font-size="14" font-weight="700">ORANGE</text>
+  <text x="372" y="184" fill="#9fb0a4" font-size="13">Data (SDI-12)</text>
+  <line x1="300" y1="230" x2="360" y2="230" stroke="#8a5a2b" stroke-width="9" stroke-linecap="round"/>
+  <text x="372" y="227" fill="#e8efe9" font-size="14" font-weight="700">BROWN</text>
+  <text x="372" y="244" fill="#9fb0a4" font-size="13">Power (5V)</text>
+  <line x1="300" y1="290" x2="360" y2="290" stroke="#b9a06a" stroke-width="9" stroke-linecap="round"/>
+  <text x="372" y="287" fill="#e8efe9" font-size="14" font-weight="700">BARE</text>
+  <text x="372" y="304" fill="#9fb0a4" font-size="13">Ground</text>
+
+  <!-- TerraLink -->
+  <rect x="510" y="96" width="220" height="300" rx="10" fill="#17201b" stroke="#26332b"/>
+  <text x="620" y="126" fill="#e8efe9" font-size="17" font-weight="700" text-anchor="middle">Growlink TerraLink</text>
+  <text x="620" y="146" fill="#9fb0a4" font-size="12" text-anchor="middle">M8 connector</text>
+  <line x1="540" y1="170" x2="600" y2="170" stroke="#f2f2f2" stroke-width="9" stroke-linecap="round"/>
+  <text x="612" y="167" fill="#e8efe9" font-size="14" font-weight="700">WHITE</text>
+  <text x="612" y="184" fill="#9fb0a4" font-size="13">Signal, pin 2</text>
+  <line x1="540" y1="230" x2="600" y2="230" stroke="#e23b3b" stroke-width="9" stroke-linecap="round"/>
+  <text x="612" y="227" fill="#e8efe9" font-size="14" font-weight="700">RED</text>
+  <text x="612" y="244" fill="#9fb0a4" font-size="13">12V, pin 1</text>
+  <line x1="540" y1="290" x2="600" y2="290" stroke="#b9a06a" stroke-width="9" stroke-linecap="round"/>
+  <text x="612" y="287" fill="#e8efe9" font-size="14" font-weight="700">BARE</text>
+  <text x="612" y="304" fill="#9fb0a4" font-size="13">Ground, pin 3</text>
+  <rect x="528" y="330" width="184" height="50" rx="7" fill="#20291f" stroke="#3a5a3a"/>
+  <text x="620" y="351" fill="#bfe6c2" font-size="12.5" text-anchor="middle">Red is 12V here, white is</text>
+  <text x="620" y="369" fill="#bfe6c2" font-size="12.5" text-anchor="middle">data. Opposite of the MT22.</text>
+
+  <text x="30" y="430" fill="#9fb0a4" font-size="13">Only "bare = ground" holds across all three. Everything else flips. Meter every wire before you power up.</text>
+</svg>

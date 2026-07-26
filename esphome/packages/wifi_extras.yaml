@@ -1,0 +1,29 @@
+# WiFi extras for wireless boards: fallback hotspot portal and
+# connection diagnostics. Not for the PoE build.
+
+captive_portal:
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 70
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+      web_server:
+        sorting_group_id: sg_diag
+        sorting_weight: 71
+    ssid:
+      name: "WiFi SSID"
+      entity_category: diagnostic
+      disabled_by_default: true
+      web_server:
+        sorting_group_id: sg_diag
+        sorting_weight: 72

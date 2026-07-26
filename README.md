@@ -1,232 +1,160 @@
-# ESPHome SDI-12 Soil Sensor Node
+# TDR Sensor
 
-<img width="422" alt="image" src="https://github.com/user-attachments/assets/016be169-07ad-4ae3-9595-a7683551daf5" />
+A WiFi substrate sensor for crop steering. It reads an SDI-12 moisture probe, works out water content, pore EC and temperature, and runs a full set of dryback and steering analytics on the device itself. No cloud, no subscription. Flash it from your browser, open its web page, and read your root zone.
 
-<img width="1507" alt="image" src="https://github.com/user-attachments/assets/bfbed084-31c4-42fe-8025-02fab2559257" />
+Built for rockwool and coco, tuned against the METER TEROS 12 calibration, runs on cheap M5Stack hardware and a clone probe that costs a fraction of a branded system.
 
-Here’s the same README rewritten without emojis or decorative icons—clean, technical, and ready for a professional GitHub repository:
+## What it does
 
----
+- Reads VWC, pore water EC, bulk EC and substrate temperature over SDI-12
+- Full calibration suite you set from the web page, no reflashing: substrate profiles, two point VWC calibration, single point EC calibration, and every coefficient exposed
+- On-device crop steering analytics: peak, trough, dryback in points and percent, dryback rate, shot detection, EC stacking, saturation, and more
+- Steering detection that reads whether the plant is being driven vegetative or generative from how the substrate behaves
+- Its own web page with live readings and history, so you need nothing else
+- MQTT for Mycodo, Node-RED, Grafana or anything else that speaks it
+- Native Home Assistant integration with auto-discovery, blueprints and a dashboard
+- CSV logging straight off the device with a small Python script
 
-# ESPHome SDI-12 Soilless Media Sensor Node
+## Which board and probe
 
-Accurate VWC and Pore EC Readings for Rockwool, Coco, and Peat
+Boards, any one of these:
 
-<img width="422" alt="image" src="https://github.com/user-attachments/assets/016be169-07ad-4ae3-9595-a7683551daf5" />  
-<img width="1507" alt="image" src="https://github.com/user-attachments/assets/bfbed084-31c4-42fe-8025-02fab2559257" />
+- M5Stack Atom Lite, the cheap and common pick
+- M5Stack AtomS3 Lite
+- M5Stack Atom PoE, for wired ethernet with power down the same cable
+- M5Stack Dial, which has a round screen that shows the readings
+- Any generic ESP32 dev board
 
----
+Probe: an Infiwin MT22A is the value pick and what this is built around. A genuine METER TEROS 12 if you want the reference. Full buying guide, including who actually makes what, is in [docs/SENSORS.md](docs/SENSORS.md).
 
-## Overview
+## Install the easy way, no software
 
-This project provides a complete ESPHome configuration for building a reliable Wi-Fi–enabled SDI-12 sensor node.
-It runs on an M5Stack Atom Lite (ESP32) and reads soilless-media moisture sensors such as the Infiwin MT22 (a Teros-12-compatible clone).
+Pre-built firmware flashes straight from your browser using ESPHome's own web flasher. Nothing to install, no ESPHome, no command line.
 
-It is tuned specifically for rockwool, coco, and peat substrates, performing on-device calibration and physics-based corrections to produce:
+1. Download the `.factory.bin` for your board from the [Releases page](https://github.com/JakeTheRabbit/TDR-Sensor/releases).
+2. Plug your board in over USB.
+3. Go to [web.esphome.io](https://web.esphome.io) in Chrome, Edge or Opera on a desktop, and click **CONNECT**.
+4. Click **Install**, not "Prepare for first use". Choose the file you downloaded and let it flash.
+5. Enter your WiFi when it offers, then open `http://tdr-sensor.local` to see your readings.
 
-* Volumetric Water Content (VWC) using a polynomial calibration
-* Pore Water Electrical Conductivity (pwEC) using a hybrid Hilhorst and mass-balance model
-* Temperature-normalized EC (25 °C) for consistent comparison
+Full step by step, driver notes, and a fallback flasher if that page will not talk to your board: [docs/FLASHING.md](docs/FLASHING.md).
 
----
+## Install with ESPHome
 
-## Disclaimer
+If you want to change the config or update over WiFi, run it through ESPHome instead. Your config is about ten lines that pull the packages from this repo, so fixes and new features come down when you rebuild:
 
-* This configuration is provided as-is and is experimental.
-* Validate readings against reference instruments before operational use.
-* Always calibrate sensors in your specific substrate and nutrient range.
+```yaml
+substitutions:
+  name: tdr-sensor
+  sdi12_data_pin: GPIO26
 
----
+packages:
+  tdr:
+    url: https://github.com/JakeTheRabbit/TDR-Sensor
+    ref: main
+    refresh: 1d
+    files:
+      - esphome/packages/boards/atom-lite.yaml
+      - esphome/packages/tdr_sdi12_core.yaml
+      - esphome/packages/tdr_analytics.yaml
+      - esphome/packages/wifi_extras.yaml
 
-## Features
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap: {}
 
-| Capability                 | Description                                                          |
-| -------------------------- | -------------------------------------------------------------------- |
-| SDI-12 Communication       | Native single-wire protocol for industrial soil sensors              |
-| Soilless Calibration       | Uses Teros-12 “non-soil” polynomial for rockwool, coco, and peat     |
-| Hybrid EC Model            | Automatically switches between Hilhorst (wet) and mass-balance (dry) |
-| Temperature Compensation   | Normalizes EC to 25 °C                                               |
-| On-Device Processing       | All calculations done locally on the ESP32                           |
-| Home Assistant Integration | Exposes all sensors via native API                                   |
-| Web Dashboard              | Local web server for live readings                                   |
-| Safe Restart               | Physical button (3–10 s hold) or remote switch                       |
-| Resilient Networking       | Fallback Wi-Fi access point if main network fails                    |
-
----
-
-## Hardware
-
-| Component   | Notes                                                                                                                               |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| ESP32 Board | [M5Stack Atom Lite](https://shop.m5stack.com/products/atom-lite-esp32-development-kit) (tested also on Atom S3, PoE ESP32, M5 Dial) |
-| Sensor      | Infiwin MT22 (SDI-12 version), METER TEROS-12, Growlink Terralink series                                                            |
-| Power       | 5 V (typical) or 3.3 V depending on board and sensor                                                                                |
-| Wiring      | Standard 3-wire SDI-12 connection                                                                                                   |
-
-### Wiring Table
-
-| SDI-12 Sensor | M5 Atom Pin | Description                |
-| ------------- | ----------- | -------------------------- |
-| Data          | G26         | SDI-12 half-duplex line    |
-| Power (VCC)   | 5 V / 3.3 V | Match sensor specification |
-| Ground        | GND         | Common ground              |
-
-The SDI-12 “data” line is half-duplex: TX and RX share GPIO 26 and use inverted signaling as per SDI-12 protocol.
-
----
-
-## Installation
-
-1. **ESPHome Environment** – Install ESPHome via the Home Assistant add-on or standalone CLI.
-2. **Secrets File** – Create `secrets.yaml` for network credentials:
-
-   ```yaml
-   wifi_ssid: "YourWiFi_SSID"
-   wifi_password: "YourWiFi_Password"
-   ```
-3. **Flash the Device**
-
-   * Copy the YAML (`f1-row2-front-sdi12.yaml`) into your ESPHome folder.
-   * Update `api.encryption.key` and `ota.password` with unique secure values.
-   * Connect the M5Stack Atom via USB → Install.
-   * Subsequent updates can be performed Over-The-Air (OTA).
-
----
-
-## Sensor Logic and Calibration
-
-### Volumetric Water Content (VWC)
-
-```cpp
-float R = id(mt22_raw).state;
-float theta = 6.771e-10*R*R*R - 5.105e-6*R*R + 1.302e-2*R - 10.848;
-float pct = theta * 100.0f;
+ota:
+  - platform: esphome
 ```
 
-* Polynomial derived from the Teros-12 “soilless” calibration, valid across rockwool, coco, and peat.
-* Result clamped between 0–100%.
-* Adjust offset or scale to align with reference instruments if needed.
+The full config for every board, the self-contained version, MQTT, and how to pin a version are all in [docs/CONFIG.md](docs/CONFIG.md).
 
----
+## Wiring
 
-### Pore Water Electrical Conductivity (pwEC)
+Read [docs/WIRING.md](docs/WIRING.md) before you connect anything. The short version: the probe has three wires, data goes to the pin your board uses, power to 5V, ground to ground. The catch is that wire colours are not the same between sensor brands. On the Infiwin MT22 the red wire is data, not power, so wiring it by habit puts 5V on the data line. Check it against the colour table.
 
-Standard sensors report **Bulk EC (σb)**—the combined conductivity of solids, water, and air.
-The **Pore Water EC (σp)** isolates the salinity of the water actually available to plant roots.
+## Calibration
 
-This configuration implements a hybrid model:
+The sensor reads usefully out of the box, but for real work you calibrate it in your own substrate. It is a ten minute job with a scale and a bucket, done entirely from the web page. Step by step for rockwool and coco in [docs/CALIBRATION.md](docs/CALIBRATION.md).
 
-```cpp
-// mass-balance fallback (dry media)
-ec_mass = σb / θ;
+## The analytics, and what they tell you
 
-// Hilhorst model (wet media)
-ec_hil = σb * (εp25 / (εb – ε0));
+Everything below runs on the device, updates live, and shows on the web page and in Home Assistant.
 
-// dynamic blending
-if θ ≤ 0.40 → use mass-balance
-if θ ≥ 0.60 → use Hilhorst
-blend linearly in between
-```
+- Peak and trough VWC, with the time each happened
+- Dryback since the last peak, both in points and as a percent of the peak
+- Dryback rate in percent per hour, over a rolling hour
+- Max dryback today and overnight dryback
+- Rolling 24 hour min, max and average for VWC and pore EC
+- Shots today, time since the last irrigation, and an irrigating flag, all from a shot detector that watches for the substrate rising then plateauing
+- Pore EC captured at field capacity, and EC stacking, the rise in root zone EC since that point
+- Saturation against field capacity
+- Field capacity learned automatically from the seven day peak, as a cross-check on your manual figure
+- A sensor fault flag that trips if the probe stops answering or freezes
 
-**Result:**
-Stable EC readings across all moisture levels, eliminating NaN and 50+ dS/m spikes that occur in dry media.
+### Steering detection
 
-Expected range in rockwool: 4–6 dS/m under typical feed EC 2.0–3.0 dS/m.
+The device works out whether your watering is pushing the plant vegetative or generative, from four signals: how big the drybacks are, how many shots a day, how much EC stacks through the day, and how much headroom there is between average VWC and field capacity. It combines them into a steering index from -1 to +1 and a plain label, Vegetative, Balanced or Generative, with a confidence. The thresholds are all settings you can move. It needs a few irrigation cycles before it will call anything, so it says Learning at first.
 
----
+This is a read on what the substrate behaviour implies, not a controller. It tells you what your irrigation is doing so you can decide what to change.
 
-### Temperature Normalization
+## Data logging without Home Assistant
 
-Electrical conductivity increases by approximately 1.9% per °C above 25°C.
-The bulk EC is normalized to 25°C internally:
-
-```cpp
-σb25 = σb / (1.0 + 0.019 * (T - 25.0));
-```
-
----
-
-## Substrate Calibration Notes
-
-| Substrate    | Typical Range (VWC) | Notes                                       |
-| ------------ | ------------------- | ------------------------------------------- |
-| Rockwool     | 0.20 – 0.80         | Default polynomial performs best            |
-| Coco Coir    | 0.15 – 0.75         | Slightly higher bound water; add +5% offset |
-| Peat         | 0.10 – 0.65         | Reads higher εb; subtract ~3% VWC           |
-| Mineral Soil | 0.00 – 0.60         | Use Teros-12 “soil” polynomial instead      |
-
-A `select:` block can be added in ESPHome to switch between these calibrations.
-
----
-
-## Home Assistant Integration
-
-Entities exposed:
-
-* `sensor.vwc`
-* `sensor.mt22_temp`
-* `sensor.pwec`
-* `sensor.bulk_ec`
-* `sensor.uptime`
-
-Visualize data using Plotly Graph Card or Mini Graph Card for detailed trends.
-
----
-
-## Example Readings
-
-| Parameter      | Typical Value | Units |
-| -------------- | ------------- | ----- |
-| VWC            | 25 – 80       | %     |
-| Temperature    | 18 – 28       | °C    |
-| Bulk EC        | 0.5 – 2.0     | dS/m  |
-| Pore EC (pwEC) | 2 – 10        | dS/m  |
-
-Measured in rockwool using Athena Pro Line nutrients under typical grow conditions.
-
----
-
-## Repository Structure
+There is a small Python script at [tools/tdr_logger.py](tools/tdr_logger.py) that subscribes to the device and writes CSV. Standard library only, nothing to install.
 
 ```
-📁 esphome/
- ├── f1-row2-front-sdi12.yaml      # Full configuration
- ├── secrets.yaml.example          # Template for Wi-Fi credentials
- └── README.md                     # Documentation
+python tools/tdr_logger.py 192.168.1.50 --wide --interval 60 --out grow.csv
 ```
 
----
+That writes a row a minute with a column per sensor. Drop the flags for a row per reading as they arrive.
 
-## References
+## Home Assistant
 
-* **METER Group – Teros-12 Integrator Guide**
-  [PDF](https://www.labcell.com/media/140638/teros%2012%20integrators%20guide.pdf)
-* **Hilhorst (2000)** – “Dielectric method for soil EC and water content.” *Soil Sci. Soc. Am. J.*
-* **Infiwin MT22 User Manual v6.01** – [infwin.com](https://www.infwin.com/mt22-soil-moisture-ec-temperature-sensor-sdi-12/)
-* **Growlink Terralink** – Field reference for compatible EC algorithms.
+The node is a native ESPHome device, so Home Assistant discovers it on its own, no custom component and no HACS. Two automation blueprints ship with it, dryback-triggered irrigation and an EC alert, plus a ready dashboard. Full guide, and an honest note on what HACS does and does not do, in [docs/HOMEASSISTANT.md](docs/HOMEASSISTANT.md).
 
----
+## Troubleshooting
 
-## Contributing
+If the device runs but every reading is unknown, the probe is not talking to the board, and that has a short list of causes. Start with [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
 
-Contributions, calibration datasets, and improvements are welcome.
-If you have developed substrate-specific calibration curves or enhancements, please submit a pull request or open an issue.
+## Repository layout
 
----
+```
+esphome/
+  tdr-sensor-*.yaml            device files, one per board
+  packages/
+    tdr_sdi12_core.yaml        SDI-12 read plus the whole calibration pipeline
+    tdr_analytics.yaml         dryback, irrigation and steering analytics
+    tdr_mqtt.yaml              optional MQTT
+    wifi_extras.yaml           fallback hotspot and diagnostics
+    boards/                    one file per board with its pins and LED
+  import/                      minimal configs for adopting pre-built firmware
+  factory/                     what CI builds into the browser-flashable firmware
+tools/
+  tdr_logger.py                CSV logger over the device event stream
+blueprints/automation/         Home Assistant blueprints
+lovelace/dashboard.yaml        Home Assistant dashboard
+docs/                          flashing, config, wiring, calibration, sensors, HA
+.github/workflows/             builds firmware for every board, attaches it to releases
+```
+
+## What changed from the original config
+
+This is a rebuild of the earlier single-file config. What moved and why:
+
+- Restructured into packages so a device config is a handful of lines and updates pull from GitHub.
+- Bulk EC at 25C is now actually temperature-normalised. The old config had a sensor named for it that only divided the raw number, so it did nothing. It defaults to off because the MT22 already normalises internally, and there is a coefficient to turn it on for probes that do not.
+- The Hilhorst pore EC model now includes the pore water permittivity temperature term from the METER manual, instead of a fixed constant. More accurate as substrate temperature moves.
+- The pore EC blend between the Hilhorst and mass balance models is now a pair of settings you can move, rather than hardcoded at 40 and 60 percent.
+- The VWC polynomial was checked against the TEROS 12 manual and is correct. Added the mineral soil curve and a custom polynomial option alongside the soilless one.
+- Added a median filter on the raw counts and a light smoothing filter on VWC, which kills the single-sample SDI-12 glitches that used to show as spikes.
+- The device no longer reboots itself every fifteen minutes when no Home Assistant is connected, so it runs happily standalone on just the web page or MQTT.
+- Web page upgraded to the sorted, grouped layout and bundled so it works with no internet.
+
+## Credits
+
+Calibration maths from the METER TEROS 11/12 manual. SDI-12 and half-duplex UART components by ssieb. Original inspiration from kromadg's soil-sensor project and the science-in-hydroponics writeups. Built by Legacy Ag.
 
 ## License
 
-MIT License © 2025 Legacy Workspace NZ
-"Measure precisely, grow intelligently."
-
----
-
-Would you like me to add a short “Calibration Workflow” section explaining how to collect true VWC/EC data to create new polynomials for other substrates? It would complete the documentation set for research or professional growers.
-
-
-## References
-
-* **TEROS 12 Manual**: The calibration and conversion formulas were derived based on information in the [official TEROS 12 Manual](https://www.labcell.com/media/140632/teros12%20manual.pdf) (see pages 15-17).
-* **Inspiration**: This project was originally inspired by the work of [kromadg's soil-sensor](https://github.com/kromadg/soil-sensor).
-* **M5Stack ESPHome Components**: Credits to [Chill Division](https://github.com/Chill-Division/M5Stack-ESPHome) for their work on M5Stack components for ESPHome.
+MIT. Use it, change it, sell what you grow with it.

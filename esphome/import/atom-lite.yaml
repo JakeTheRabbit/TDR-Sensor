@@ -1,0 +1,30 @@
+# Adopted config for M5Stack Atom Lite. Created when you adopt a
+# device flashed with the pre-built firmware into the ESPHome
+# dashboard. Packages pull from GitHub so updates flow through.
+
+substitutions:
+  name: tdr-sensor
+  friendly_name: TDR Sensor
+  sdi12_data_pin: GPIO26
+  sdi12_address: "0"
+  sample_interval: 10s
+  timezone: Pacific/Auckland
+
+packages:
+  tdr:
+    url: https://github.com/JakeTheRabbit/TDR-Sensor
+    ref: main
+    refresh: 1d
+    files:
+      - esphome/packages/boards/atom-lite.yaml
+      - esphome/packages/tdr_sdi12_core.yaml
+      - esphome/packages/tdr_analytics.yaml
+      - esphome/packages/wifi_extras.yaml
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap: {}
+
+ota:
+  - platform: esphome

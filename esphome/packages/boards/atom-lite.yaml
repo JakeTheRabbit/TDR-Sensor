@@ -1,0 +1,71 @@
+# M5Stack Atom Lite board package
+# Onboard SK6812 LED on GPIO27, button on GPIO39, Grove port G26/G32.
+# The LED shows steering state at a glance:
+#   blue   = irrigation in progress
+#   green  = drying, before dryback target
+#   orange = dryback target reached
+# Click the button to toggle the LED. Needs the analytics package.
+
+esp32:
+  board: m5stack-atom
+  framework:
+    type: esp-idf
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: atom_led
+    name: "Status LED"
+    internal: true
+    pin: GPIO27
+    num_leds: 1
+    chipset: SK6812
+    rgb_order: GRB
+    default_transition_length: 300ms
+
+switch:
+  - platform: template
+    name: "Status LED Enable"
+    id: led_enable
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+    entity_category: config
+    icon: mdi:led-on
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 80
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO39
+      inverted: true
+    id: atom_button
+    internal: true
+    on_click:
+      - min_length: 50ms
+        max_length: 1s
+        then:
+          - switch.toggle: led_enable
+
+interval:
+  - interval: 10s
+    then:
+      - lambda: |-
+          if (!id(led_enable).state) {
+            id(atom_led).turn_off().perform();
+            return;
+          }
+          float r = 0.0f, g = 0.0f, b = 0.0f;
+          if (id(g_phase) == 1) {
+            b = 1.0f;
+          } else {
+            float p = id(g_peak);
+            float v = id(vwc).state;
+            bool over = !isnan(p) && !isnan(v) && (p - v) >= id(target_dryback).state;
+            if (over) { r = 1.0f; g = 0.35f; }
+            else      { g = 1.0f; }
+          }
+          auto call = id(atom_led).turn_on();
+          call.set_brightness(0.25f);
+          call.set_rgb(r, g, b);
+          call.perform();

@@ -1,0 +1,66 @@
+blueprint:
+  name: TDR pore EC alert
+  description: >
+    Send a notification when pore water EC drifts out of range. Useful
+    for catching EC stacking in the root zone or a feed line that has
+    run dry. Fires once when EC crosses the high or low limit.
+  domain: automation
+  source_url: https://github.com/JakeTheRabbit/TDR-Sensor/blob/main/blueprints/automation/tdr_ec_alert.yaml
+  input:
+    ec_sensor:
+      name: Pore EC sensor
+      description: The "Pore EC" sensor from your TDR node.
+      selector:
+        entity:
+          filter:
+            domain: sensor
+    high_limit:
+      name: High EC limit
+      description: Alert when pore EC rises above this (dS/m).
+      default: 9
+      selector:
+        number:
+          min: 1
+          max: 20
+          step: 0.1
+          unit_of_measurement: dS/m
+    low_limit:
+      name: Low EC limit
+      description: Alert when pore EC drops below this (dS/m).
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 0.1
+          unit_of_measurement: dS/m
+    notify_action:
+      name: Notification action
+      description: What to do on an alert. Pick a notify service, for example your phone app.
+      selector:
+        action: {}
+
+mode: single
+
+trigger:
+  - platform: numeric_state
+    entity_id: !input ec_sensor
+    above: !input high_limit
+    id: high
+  - platform: numeric_state
+    entity_id: !input ec_sensor
+    below: !input low_limit
+    id: low
+
+variables:
+  ec_entity: !input ec_sensor
+
+action:
+  - variables:
+      reading: "{{ states(ec_entity) }}"
+      direction: "{{ 'high' if trigger.id == 'high' else 'low' }}"
+      message: >
+        Pore EC {{ direction }} on {{ state_attr(ec_entity, 'friendly_name') or ec_entity }}:
+        {{ reading }} dS/m
+  - choose: []
+    default: !input notify_action

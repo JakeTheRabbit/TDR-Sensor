@@ -1,0 +1,115 @@
+# M5Stack Dial board package (ESP32-S3, GC9A01A 240x240 round LCD)
+# -------------------------------------------------------------------
+# The Dial shows live readings on its screen, so you can wall-mount it
+# next to the plants and read VWC without a phone. Set the SDI-12 data
+# wire to Port B in your device file:
+#
+#   substitutions:
+#     sdi12_data_pin: GPIO2
+#
+# Port A (G13/G15) is the internal I2C convention, Port B (G1/G2) is
+# free. Encoder on G40/G41, front button on G42, backlight on G9.
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+# The Dial logs over native USB, not a UART bridge. USB_SERIAL_JTAG
+# keeps logging alive and lets the browser provision WiFi over USB.
+logger:
+  hardware_uart: USB_SERIAL_JTAG
+
+# The Dial's StampS3 module has no PSRAM, so none is configured. The
+# 240x240 readout runs fine without it.
+
+spi:
+  clk_pin: GPIO6
+  mosi_pin: GPIO5
+
+output:
+  - platform: ledc
+    pin: GPIO9
+    id: backlight_output
+
+light:
+  - platform: monochromatic
+    output: backlight_output
+    name: "Screen Backlight"
+    id: screen_backlight
+    restore_mode: RESTORE_DEFAULT_ON
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 80
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_big
+    size: 46
+  - file: "gfonts://Roboto"
+    id: font_med
+    size: 22
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 16
+
+color:
+  - id: c_white
+    red: 100%
+    green: 100%
+    blue: 100%
+  - id: c_grey
+    red: 55%
+    green: 55%
+    blue: 55%
+  - id: c_green
+    red: 30%
+    green: 85%
+    blue: 35%
+  - id: c_amber
+    red: 100%
+    green: 70%
+    blue: 20%
+
+display:
+  - platform: ili9xxx
+    model: GC9A01A
+    cs_pin: GPIO7
+    dc_pin: GPIO4
+    reset_pin: GPIO8
+    invert_colors: true
+    update_interval: 1s
+    lambda: |-
+      it.fill(Color::BLACK);
+      it.print(120, 34, id(font_small), c_grey, TextAlign::CENTER, "VWC");
+      float v = id(vwc).state;
+      if (isnan(v)) {
+        it.print(120, 92, id(font_big), c_white, TextAlign::CENTER, "--");
+      } else {
+        it.printf(120, 92, id(font_big), c_white, TextAlign::CENTER, "%.1f%%", v);
+      }
+      float ec = id(pwec).state;
+      if (!isnan(ec))
+        it.printf(120, 140, id(font_med), c_amber, TextAlign::CENTER, "EC %.2f", ec);
+      float db = id(dryback_pts).state;
+      if (!isnan(db))
+        it.printf(120, 168, id(font_med), c_white, TextAlign::CENTER, "DB %.1f%%", db);
+      it.printf(120, 200, id(font_small), c_green, TextAlign::CENTER, "%s",
+                id(steering_mode).state.c_str());
+
+sensor:
+  - platform: rotary_encoder
+    id: dial_encoder
+    internal: true
+    pin_a: GPIO40
+    pin_b: GPIO41
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO42
+      inverted: true
+    id: dial_button
+    internal: true
+    on_click:
+      - light.toggle: screen_backlight

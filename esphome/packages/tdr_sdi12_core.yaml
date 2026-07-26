@@ -1,0 +1,941 @@
+# ===================================================================
+# TDR-Sensor core package
+# SDI-12 substrate sensor (Infiwin MT22 / TEROS-12 compatible)
+# -------------------------------------------------------------------
+# Reads raw counts, temperature and bulk EC over SDI-12, then runs
+# the full calibration pipeline on the ESP32:
+#
+#   raw counts
+#     -> substrate polynomial (rockwool/coco/peat share the TEROS-12
+#        soilless curve, mineral soil uses the linear curve, custom
+#        uses your own a/b/c/d)
+#     -> field calibration (gain and offset, settable by hand or from
+#        the two-point capture buttons)
+#     -> VWC %
+#
+#   bulk EC
+#     -> gain and offset
+#     -> normalise to 25 C (off by default, the MT22 already does this
+#        inside the probe)
+#     -> pore water EC: Hilhorst when the media is wet, mass balance
+#        when it is dry, blended across a VWC window you can set
+#
+# Everything is tunable at runtime from the web page or Home
+# Assistant. You never reflash to calibrate.
+#
+# This package carries no board, wifi or ethernet config. Those live
+# in the board package and the device file. See the repo README.
+# ===================================================================
+
+substitutions:
+  name: tdr-sensor
+  friendly_name: TDR Sensor
+  # SDI-12 data wire GPIO. Set by the board package normally.
+  sdi12_data_pin: GPIO26
+  # SDI-12 sensor address. Factory default on the MT22 is 0.
+  sdi12_address: "0"
+  # How often to poll the probe. 10s is fine. Do not go below 3s, an
+  # SDI-12 measurement cycle takes a second or two.
+  sample_interval: 10s
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  min_version: 2025.2.0
+  project:
+    name: jaketherabbit.tdr-sensor
+    version: "2.0.0"
+  on_boot:
+    # Runs after restore so changing a setting later applies its
+    # defaults, but a reboot does not stomp your saved values.
+    priority: -100
+    then:
+      - lambda: 'id(g_ready) = true;'
+
+logger:
+  level: INFO
+
+# reboot_timeout 0 so the node runs happily standalone (web page or
+# MQTT only, no Home Assistant connected). Without this the ESP
+# reboots every 15 minutes when no API client is attached.
+api:
+  reboot_timeout: 0s
+
+# Batch persisted writes to cut flash wear from the analytics globals.
+preferences:
+  flash_write_interval: 15min
+
+# Prometheus scrape endpoint at http://<ip>/metrics for Grafana,
+# VictoriaMetrics or Telegraf. Free logging without Home Assistant.
+prometheus:
+
+web_server:
+  port: 80
+  version: 3
+  # Bundle the web assets into the firmware so the page works with no
+  # internet access.
+  local: true
+  sorting_groups:
+    - id: sg_live
+      name: "Live Readings"
+      sorting_weight: 10
+    - id: sg_analytics
+      name: "Crop Steering Analytics"
+      sorting_weight: 20
+    - id: sg_steering
+      name: "Steering Detection"
+      sorting_weight: 25
+    - id: sg_calibration
+      name: "Calibration"
+      sorting_weight: 30
+    - id: sg_tuning
+      name: "Analytics Tuning"
+      sorting_weight: 40
+    - id: sg_diag
+      name: "Diagnostics"
+      sorting_weight: 50
+
+# -------------------------------------------------------------------
+# SDI-12 bus
+# -------------------------------------------------------------------
+# half_duplex UART only exists in ssieb's esp-idf fork. The Arduino
+# framework and the ESP8266 have no half-duplex path, the build looks
+# fine and the probe just never answers. Keep esp-idf, keep the fork.
+external_components:
+  - source: github://ssieb/esphome@uarthalf
+    components: [ uart ]
+    refresh: 1d
+  - source: github://ssieb/esphome_components@sdi12
+    components: [ sdi12 ]
+    refresh: 1d
+
+# On ESP32 half_duplex you set tx_pin only. Setting both pins is a
+# validation error.
+uart:
+  - id: sdi12_uart
+    tx_pin:
+      number: ${sdi12_data_pin}
+      inverted: true
+    baud_rate: 1200
+    data_bits: 7
+    parity: even
+    stop_bits: 1
+    half_duplex: true
+
+sdi12:
+  - id: sdi12_bus
+    uart_id: sdi12_uart
+
+# -------------------------------------------------------------------
+# Globals
+# -------------------------------------------------------------------
+globals:
+  - id: g_ready
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  # Substrate as an index so the lambdas do not depend on the select
+  # object. 0 Rockwool, 1 Coco, 2 Peat, 3 Mineral Soil, 4 Custom.
+  - id: g_substrate_idx
+    type: int
+    restore_value: true
+    initial_value: '0'
+  - id: g_cal_dry_poly
+    type: float
+    restore_value: true
+    initial_value: 'NAN'
+  - id: g_cal_wet_poly
+    type: float
+    restore_value: true
+    initial_value: 'NAN'
+
+# -------------------------------------------------------------------
+# Sensors
+# -------------------------------------------------------------------
+sensor:
+  # ---- Raw values from the probe -----------------------------------
+  # A 5-wide median knocks out single-sample SDI-12 glitches before
+  # anything downstream sees them.
+  - platform: sdi12
+    address: ${sdi12_address}
+    update_interval: ${sample_interval}
+    sensors:
+      - index: 1
+        name: "Raw Counts"
+        id: raw_counts
+        accuracy_decimals: 0
+        entity_category: diagnostic
+        state_class: measurement
+        icon: mdi:counter
+        web_server:
+          sorting_group_id: sg_diag
+          sorting_weight: 10
+        filters:
+          - median:
+              window_size: 5
+              send_every: 1
+              send_first_at: 1
+      - index: 2
+        name: "Substrate Temperature Raw"
+        id: substrate_temp_raw
+        internal: true
+        accuracy_decimals: 1
+      - index: 3
+        name: "Bulk EC Raw"
+        id: bulk_ec_us_raw
+        internal: true
+        accuracy_decimals: 0
+        filters:
+          - median:
+              window_size: 5
+              send_every: 1
+              send_first_at: 1
+
+  # ---- VWC pipeline ------------------------------------------------
+  # Polynomial output before field calibration. Not clamped, the
+  # capture buttons need the real number.
+  - platform: template
+    name: "VWC Uncalibrated"
+    id: vwc_poly
+    unit_of_measurement: "%"
+    accuracy_decimals: 2
+    update_interval: ${sample_interval}
+    entity_category: diagnostic
+    disabled_by_default: true
+    state_class: measurement
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 20
+    lambda: |-
+      float R = id(raw_counts).state;
+      if (isnan(R) || R <= 0.0f) return NAN;
+      int p = id(g_substrate_idx);
+      float theta;  // m3/m3
+      if (p == 3) {
+        // TEROS-12 mineral soil calibration
+        theta = 3.879e-4f * R - 0.6956f;
+      } else if (p == 4) {
+        theta = id(custom_a).state * R * R * R
+              + id(custom_b).state * R * R
+              + id(custom_c).state * R
+              + id(custom_d).state;
+      } else {
+        // TEROS-12 soilless calibration, shared by rockwool, coco
+        // and peat.
+        theta = 6.771e-10f * R * R * R
+              - 5.105e-6f * R * R
+              + 1.302e-2f * R
+              - 10.848f;
+      }
+      return theta * 100.0f;
+
+  # Field-calibrated VWC. Median already applied upstream, a light EMA
+  # here smooths the last bit of jitter for the analytics.
+  - platform: template
+    name: "VWC"
+    id: vwc
+    unit_of_measurement: "%"
+    device_class: moisture
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: ${sample_interval}
+    icon: mdi:water-percent
+    web_server:
+      sorting_group_id: sg_live
+      sorting_weight: 10
+    filters:
+      - exponential_moving_average:
+          alpha: 0.2
+          send_every: 1
+          send_first_at: 1
+    lambda: |-
+      float p = id(vwc_poly).state;
+      if (isnan(p)) return NAN;
+      float v = p * id(vwc_gain).state + id(vwc_offset).state;
+      if (v < 0.0f) v = 0.0f;
+      if (v > 100.0f) v = 100.0f;
+      return v;
+
+  # ---- Temperature -------------------------------------------------
+  - platform: template
+    name: "Substrate Temperature"
+    id: substrate_temp
+    unit_of_measurement: "°C"
+    device_class: temperature
+    state_class: measurement
+    accuracy_decimals: 1
+    update_interval: ${sample_interval}
+    web_server:
+      sorting_group_id: sg_live
+      sorting_weight: 30
+    lambda: |-
+      float t = id(substrate_temp_raw).state;
+      if (isnan(t)) return NAN;
+      return t + id(temp_offset).state;
+
+  # ---- EC pipeline -------------------------------------------------
+  - platform: template
+    name: "Bulk EC"
+    id: bulk_ec
+    unit_of_measurement: "dS/m"
+    state_class: measurement
+    accuracy_decimals: 3
+    update_interval: ${sample_interval}
+    icon: mdi:flash
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 30
+    lambda: |-
+      float us = id(bulk_ec_us_raw).state;
+      if (isnan(us)) return NAN;
+      float cal = us * id(ec_gain).state + id(ec_offset_us).state;
+      if (cal < 0.0f) cal = 0.0f;
+      return cal / 1000.0f;
+
+  - platform: template
+    name: "Bulk EC @25C"
+    id: bulk_ec_25
+    unit_of_measurement: "dS/m"
+    state_class: measurement
+    accuracy_decimals: 3
+    update_interval: ${sample_interval}
+    icon: mdi:flash
+    web_server:
+      sorting_group_id: sg_live
+      sorting_weight: 40
+    lambda: |-
+      float ec = id(bulk_ec).state;
+      if (isnan(ec)) return NAN;
+      float t = id(substrate_temp).state;
+      if (isnan(t)) return ec;
+      float k = id(ec_temp_coeff).state;
+      float denom = 1.0f + k * (t - 25.0f);
+      if (denom < 0.2f) denom = 0.2f;
+      return ec / denom;
+
+  # Apparent dielectric permittivity, TEROS-12 squared-polynomial form
+  # from the MT22 manual. Drives the Hilhorst pore EC model.
+  - platform: template
+    name: "Permittivity"
+    id: permittivity
+    accuracy_decimals: 2
+    update_interval: ${sample_interval}
+    entity_category: diagnostic
+    icon: mdi:sine-wave
+    state_class: measurement
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 40
+    lambda: |-
+      float R = id(raw_counts).state;
+      if (isnan(R) || R <= 0.0f) return NAN;
+      float inner = 2.887e-9f * R * R * R
+                  - 2.080e-5f * R * R
+                  + 5.276e-2f * R
+                  - 43.39f;
+      return inner * inner;
+
+  - platform: template
+    name: "Pore EC (mass-balance model)"
+    id: ec_mass_diag
+    unit_of_measurement: "dS/m"
+    accuracy_decimals: 2
+    update_interval: ${sample_interval}
+    entity_category: diagnostic
+    disabled_by_default: true
+    state_class: measurement
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 50
+    lambda: |-
+      float theta = id(vwc).state / 100.0f;
+      float sb25 = id(bulk_ec_25).state;
+      if (isnan(theta) || isnan(sb25)) return NAN;
+      if (theta < 0.10f) theta = 0.10f;
+      return sb25 / theta;
+
+  - platform: template
+    name: "Pore EC (Hilhorst model)"
+    id: ec_hil_diag
+    unit_of_measurement: "dS/m"
+    accuracy_decimals: 2
+    update_interval: ${sample_interval}
+    entity_category: diagnostic
+    disabled_by_default: true
+    state_class: measurement
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 60
+    lambda: |-
+      float eb = id(permittivity).state;
+      float sb25 = id(bulk_ec_25).state;
+      if (isnan(eb) || isnan(sb25)) return NAN;
+      float e0 = id(hilhorst_e0).state;
+      float denom = eb - e0;
+      if (denom <= 0.5f) return NAN;
+      // Pore water permittivity vs temperature, METER Eq 2.
+      float t = id(substrate_temp).state;
+      float ep = isnan(t) ? 80.3f : (80.3f - 0.37f * (t - 20.0f));
+      float ec = sb25 * ep / denom;
+      if (ec <= 0.0f || ec >= 30.0f) return NAN;
+      return ec;
+
+  # The headline pore water EC. Hilhorst holds up when the media is
+  # wet, mass balance holds up when it is dry, so we blend between
+  # them across the VWC window. This kills the NaN and the 50 dS/m
+  # spikes you get from Hilhorst alone in dry media.
+  - platform: template
+    name: "Pore EC"
+    id: pwec
+    unit_of_measurement: "dS/m"
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: ${sample_interval}
+    icon: mdi:water-opacity
+    web_server:
+      sorting_group_id: sg_live
+      sorting_weight: 20
+    lambda: |-
+      float theta = id(vwc).state / 100.0f;
+      float sb25 = id(bulk_ec_25).state;
+      if (isnan(theta) || isnan(sb25)) return NAN;
+      float th = theta < 0.10f ? 0.10f : theta;
+      float ec_mass = sb25 / th;
+      float ec_hil = id(ec_hil_diag).state;
+      float lo = id(pwec_blend_low).state / 100.0f;
+      float hi = id(pwec_blend_high).state / 100.0f;
+      if (hi <= lo + 0.01f) hi = lo + 0.01f;
+      float ec = ec_mass;
+      if (!isnan(ec_hil)) {
+        float w;
+        if (theta <= lo)      w = 0.0f;
+        else if (theta >= hi) w = 1.0f;
+        else                  w = (theta - lo) / (hi - lo);
+        ec = (1.0f - w) * ec_mass + w * ec_hil;
+      }
+      if (ec < 0.0f) ec = 0.0f;
+      if (ec > 30.0f) ec = 30.0f;
+      return ec;
+
+  # ---- Housekeeping ------------------------------------------------
+  - platform: uptime
+    name: "Uptime"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 90
+
+# -------------------------------------------------------------------
+# Substrate profile and calibration controls. All persist across
+# reboots.
+# -------------------------------------------------------------------
+select:
+  - platform: template
+    name: "Substrate Profile"
+    id: substrate_profile
+    optimistic: true
+    restore_value: true
+    entity_category: config
+    icon: mdi:layers-triple
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 5
+    options:
+      - "Rockwool"
+      - "Coco"
+      - "Peat"
+      - "Mineral Soil"
+      - "Custom"
+    initial_option: "Rockwool"
+    on_value:
+      - lambda: |-
+          if (x == "Coco") id(g_substrate_idx) = 1;
+          else if (x == "Peat") id(g_substrate_idx) = 2;
+          else if (x == "Mineral Soil") id(g_substrate_idx) = 3;
+          else if (x == "Custom") id(g_substrate_idx) = 4;
+          else id(g_substrate_idx) = 0;
+      - if:
+          condition:
+            lambda: 'return id(g_ready);'
+          then:
+            - script.execute: apply_substrate_defaults
+
+number:
+  # ---- VWC field calibration ---------------------------------------
+  - platform: template
+    name: "VWC Gain"
+    id: vwc_gain
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    min_value: 0.25
+    max_value: 2.0
+    step: 0.001
+    mode: box
+    entity_category: config
+    icon: mdi:multiplication
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 20
+
+  - platform: template
+    name: "VWC Offset"
+    id: vwc_offset
+    optimistic: true
+    restore_value: true
+    initial_value: 0.0
+    min_value: -40.0
+    max_value: 40.0
+    step: 0.1
+    mode: box
+    unit_of_measurement: "%"
+    entity_category: config
+    icon: mdi:plus-minus-variant
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 21
+
+  - platform: template
+    name: "Saturated Reference"
+    id: sat_reference
+    optimistic: true
+    restore_value: true
+    initial_value: 65.0
+    min_value: 20.0
+    max_value: 95.0
+    step: 0.5
+    mode: box
+    unit_of_measurement: "%"
+    entity_category: config
+    icon: mdi:cup-water
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 22
+
+  - platform: template
+    name: "Field Capacity"
+    id: field_capacity
+    optimistic: true
+    restore_value: true
+    initial_value: 65.0
+    min_value: 20.0
+    max_value: 95.0
+    step: 0.5
+    mode: box
+    unit_of_measurement: "%"
+    entity_category: config
+    icon: mdi:water-check
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 23
+
+  # ---- Temperature -------------------------------------------------
+  - platform: template
+    name: "Temperature Offset"
+    id: temp_offset
+    optimistic: true
+    restore_value: true
+    initial_value: 0.0
+    min_value: -5.0
+    max_value: 5.0
+    step: 0.1
+    mode: box
+    unit_of_measurement: "°C"
+    entity_category: config
+    icon: mdi:thermometer-lines
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 30
+
+  # ---- EC calibration ----------------------------------------------
+  - platform: template
+    name: "EC Gain"
+    id: ec_gain
+    optimistic: true
+    restore_value: true
+    initial_value: 1.0
+    min_value: 0.25
+    max_value: 2.0
+    step: 0.001
+    mode: box
+    entity_category: config
+    icon: mdi:multiplication
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 40
+
+  - platform: template
+    name: "EC Offset"
+    id: ec_offset_us
+    optimistic: true
+    restore_value: true
+    initial_value: 0.0
+    min_value: -1000.0
+    max_value: 1000.0
+    step: 1.0
+    mode: box
+    unit_of_measurement: "µS/cm"
+    entity_category: config
+    icon: mdi:plus-minus-variant
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 41
+
+  - platform: template
+    name: "EC Reference Solution"
+    id: ec_reference
+    optimistic: true
+    restore_value: true
+    initial_value: 1.413
+    min_value: 0.1
+    max_value: 20.0
+    step: 0.001
+    mode: box
+    unit_of_measurement: "dS/m"
+    entity_category: config
+    icon: mdi:test-tube
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 42
+
+  # The MT22 already normalises bulk EC to 25 C in the probe, so this
+  # defaults to 0. If your probe outputs raw EC, set 0.019 (1.9 %/C)
+  # and the node does the correction.
+  - platform: template
+    name: "EC Temp Coefficient"
+    id: ec_temp_coeff
+    optimistic: true
+    restore_value: true
+    initial_value: 0.0
+    min_value: 0.0
+    max_value: 0.03
+    step: 0.001
+    mode: box
+    unit_of_measurement: "1/°C"
+    entity_category: config
+    icon: mdi:thermometer-water
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 43
+
+  - platform: template
+    name: "Hilhorst e0"
+    id: hilhorst_e0
+    optimistic: true
+    restore_value: true
+    initial_value: 4.1
+    min_value: 0.0
+    max_value: 7.0
+    step: 0.1
+    mode: box
+    entity_category: config
+    icon: mdi:tune-vertical
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 44
+
+  - platform: template
+    name: "Pore EC Blend Low"
+    id: pwec_blend_low
+    optimistic: true
+    restore_value: true
+    initial_value: 40.0
+    min_value: 10.0
+    max_value: 60.0
+    step: 1.0
+    mode: box
+    unit_of_measurement: "%"
+    entity_category: config
+    icon: mdi:arrow-collapse-down
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 45
+
+  - platform: template
+    name: "Pore EC Blend High"
+    id: pwec_blend_high
+    optimistic: true
+    restore_value: true
+    initial_value: 60.0
+    min_value: 30.0
+    max_value: 90.0
+    step: 1.0
+    mode: box
+    unit_of_measurement: "%"
+    entity_category: config
+    icon: mdi:arrow-collapse-up
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 46
+
+  # ---- Custom polynomial (only used by the Custom profile) ---------
+  # theta (m3/m3) = a*R^3 + b*R^2 + c*R + d, R = raw counts. Defaults
+  # are the TEROS-12 soilless curve. Type values in the box, the
+  # slider step is only for nudging.
+  - platform: template
+    name: "Custom Poly a (R^3)"
+    id: custom_a
+    optimistic: true
+    restore_value: true
+    initial_value: 0.0000000006771
+    min_value: -0.00001
+    max_value: 0.00001
+    step: 0.0000000001
+    mode: box
+    entity_category: config
+    icon: mdi:math-integral
+    disabled_by_default: true
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 50
+
+  - platform: template
+    name: "Custom Poly b (R^2)"
+    id: custom_b
+    optimistic: true
+    restore_value: true
+    initial_value: -0.000005105
+    min_value: -0.01
+    max_value: 0.01
+    step: 0.0000001
+    mode: box
+    entity_category: config
+    icon: mdi:math-integral
+    disabled_by_default: true
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 51
+
+  - platform: template
+    name: "Custom Poly c (R)"
+    id: custom_c
+    optimistic: true
+    restore_value: true
+    initial_value: 0.01302
+    min_value: -1.0
+    max_value: 1.0
+    step: 0.00001
+    mode: box
+    entity_category: config
+    icon: mdi:math-integral
+    disabled_by_default: true
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 52
+
+  - platform: template
+    name: "Custom Poly d (const)"
+    id: custom_d
+    optimistic: true
+    restore_value: true
+    initial_value: -10.848
+    min_value: -100.0
+    max_value: 100.0
+    step: 0.001
+    mode: box
+    entity_category: config
+    icon: mdi:math-integral
+    disabled_by_default: true
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 53
+
+# -------------------------------------------------------------------
+# Calibration scripts and buttons
+# -------------------------------------------------------------------
+script:
+  - id: apply_substrate_defaults
+    then:
+      - lambda: |-
+          int p = id(g_substrate_idx);
+          float fc, e0, bl, bh;
+          if (p == 1) {          // Coco
+            fc = 58.0f; e0 = 4.1f; bl = 35.0f; bh = 55.0f;
+          } else if (p == 2) {   // Peat
+            fc = 50.0f; e0 = 4.1f; bl = 35.0f; bh = 55.0f;
+          } else if (p == 3) {   // Mineral Soil
+            fc = 42.0f; e0 = 4.1f; bl = 25.0f; bh = 45.0f;
+          } else if (p == 4) {   // Custom
+            return;  // leave a custom setup alone
+          } else {               // Rockwool
+            fc = 65.0f; e0 = 4.1f; bl = 40.0f; bh = 60.0f;
+          }
+          id(field_capacity).make_call().set_value(fc).perform();
+          id(hilhorst_e0).make_call().set_value(e0).perform();
+          id(pwec_blend_low).make_call().set_value(bl).perform();
+          id(pwec_blend_high).make_call().set_value(bh).perform();
+          ESP_LOGI("cal", "Applied defaults: FC %.0f, e0 %.1f, blend %.0f-%.0f",
+                   fc, e0, bl, bh);
+
+button:
+  - platform: template
+    name: "Capture Dry Point"
+    id: btn_cap_dry
+    entity_category: config
+    icon: mdi:water-off
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 60
+    on_press:
+      - lambda: |-
+          float p = id(vwc_poly).state;
+          if (isnan(p)) { ESP_LOGW("cal", "No reading yet"); return; }
+          id(g_cal_dry_poly) = p;
+          ESP_LOGI("cal", "Dry point captured: uncalibrated VWC %.2f", p);
+
+  - platform: template
+    name: "Capture Saturated Point"
+    id: btn_cap_wet
+    entity_category: config
+    icon: mdi:water
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 61
+    on_press:
+      - lambda: |-
+          float p = id(vwc_poly).state;
+          if (isnan(p)) { ESP_LOGW("cal", "No reading yet"); return; }
+          id(g_cal_wet_poly) = p;
+          ESP_LOGI("cal", "Saturated point captured: uncalibrated VWC %.2f", p);
+
+  - platform: template
+    name: "Apply VWC Calibration"
+    id: btn_apply_vwc
+    entity_category: config
+    icon: mdi:check-decagram
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 62
+    on_press:
+      - lambda: |-
+          float dry = id(g_cal_dry_poly);
+          float wet = id(g_cal_wet_poly);
+          float ref = id(sat_reference).state;
+          if (!isnan(dry) && !isnan(wet)) {
+            if (fabsf(wet - dry) < 2.0f) {
+              ESP_LOGW("cal", "Dry (%.2f) and saturated (%.2f) too close, aborting", dry, wet);
+              return;
+            }
+            // Oven-dry is true 0, saturated is the reference value.
+            float gain = ref / (wet - dry);
+            float off = -dry * gain;
+            id(vwc_gain).make_call().set_value(gain).perform();
+            id(vwc_offset).make_call().set_value(off).perform();
+            ESP_LOGI("cal", "Two-point cal: gain %.3f, offset %.2f", gain, off);
+          } else if (!isnan(wet)) {
+            // One point: keep gain, shift so saturated reads the ref.
+            float gain = id(vwc_gain).state;
+            float off = ref - wet * gain;
+            id(vwc_offset).make_call().set_value(off).perform();
+            ESP_LOGI("cal", "Single-point cal: offset %.2f", off);
+          } else {
+            ESP_LOGW("cal", "Capture at least the saturated point first");
+          }
+
+  - platform: template
+    name: "Calibrate EC to Reference"
+    id: btn_cal_ec
+    entity_category: config
+    icon: mdi:test-tube
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 63
+    on_press:
+      - lambda: |-
+          // Probe sitting in a known EC solution reads bulk EC close
+          // to the solution EC. Set the gain so it matches.
+          float us = id(bulk_ec_us_raw).state;
+          if (isnan(us) || us < 50.0f) {
+            ESP_LOGW("cal", "EC reading too low, is the probe in solution?");
+            return;
+          }
+          float raw_ds = us / 1000.0f;
+          float ref = id(ec_reference).state;
+          float gain = ref / raw_ds;
+          id(ec_gain).make_call().set_value(gain).perform();
+          id(ec_offset_us).make_call().set_value(0.0f).perform();
+          ESP_LOGI("cal", "EC calibrated to %.3f dS/m, gain %.3f", ref, gain);
+
+  - platform: template
+    name: "Reset to Substrate Defaults"
+    id: btn_reset_defaults
+    entity_category: config
+    icon: mdi:backup-restore
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 70
+    on_press:
+      - script.execute: apply_substrate_defaults
+
+  - platform: template
+    name: "Reset VWC Calibration"
+    id: btn_reset_vwc
+    entity_category: config
+    icon: mdi:eraser
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 71
+    on_press:
+      - lambda: |-
+          id(vwc_gain).make_call().set_value(1.0f).perform();
+          id(vwc_offset).make_call().set_value(0.0f).perform();
+          id(g_cal_dry_poly) = NAN;
+          id(g_cal_wet_poly) = NAN;
+          ESP_LOGI("cal", "VWC calibration reset");
+
+  - platform: template
+    name: "Reset EC Calibration"
+    id: btn_reset_ec
+    entity_category: config
+    icon: mdi:eraser
+    web_server:
+      sorting_group_id: sg_calibration
+      sorting_weight: 72
+    on_press:
+      - lambda: |-
+          id(ec_gain).make_call().set_value(1.0f).perform();
+          id(ec_offset_us).make_call().set_value(0.0f).perform();
+          ESP_LOGI("cal", "EC calibration reset");
+
+  - platform: restart
+    name: "Restart"
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 95
+
+  - platform: safe_mode
+    name: "Restart (Safe Mode)"
+    entity_category: diagnostic
+    disabled_by_default: true
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 96
+
+text_sensor:
+  - platform: template
+    name: "Active Substrate"
+    id: active_substrate
+    update_interval: 60s
+    icon: mdi:layers-triple
+    entity_category: diagnostic
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 5
+    lambda: |-
+      switch (id(g_substrate_idx)) {
+        case 1: return {"Coco"};
+        case 2: return {"Peat"};
+        case 3: return {"Mineral Soil"};
+        case 4: return {"Custom"};
+        default: return {"Rockwool"};
+      }
+
+  - platform: version
+    name: "ESPHome Version"
+    entity_category: diagnostic
+    disabled_by_default: true
+    web_server:
+      sorting_group_id: sg_diag
+      sorting_weight: 97

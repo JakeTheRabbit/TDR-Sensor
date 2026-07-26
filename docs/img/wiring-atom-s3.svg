@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 360" font-family="Segoe UI, Roboto, sans-serif">
+  <rect width="720" height="360" rx="14" fill="#1b2430"/>
+  <text x="30" y="44" fill="#e8efe9" font-size="22" font-weight="700">M5Stack AtomS3 Lite wiring</text>
+  <text x="30" y="68" fill="#9fb0a4" font-size="14">Probe on the Grove port. Wire colours shown are for the Infiwin MT22.</text>
+
+  <rect x="40" y="110" width="210" height="180" rx="12" fill="#2b4d6b" stroke="#3f7a9a"/>
+  <text x="145" y="150" fill="#ffffff" font-size="16" font-weight="700" text-anchor="middle">AtomS3 Lite</text>
+  <text x="145" y="172" fill="#cfe0ec" font-size="12" text-anchor="middle">ESP32-S3</text>
+  <rect x="250" y="150" width="16" height="100" rx="3" fill="#14251c"/>
+  <circle cx="258" cy="170" r="5" fill="#e23b3b"/>
+  <circle cx="258" cy="200" r="5" fill="#e5c84f"/>
+  <circle cx="258" cy="230" r="5" fill="#b9a06a"/>
+
+  <rect x="500" y="120" width="180" height="160" rx="12" fill="#17201b" stroke="#26332b"/>
+  <text x="590" y="150" fill="#e8efe9" font-size="15" font-weight="700" text-anchor="middle">SDI-12 probe</text>
+  <text x="590" y="170" fill="#9fb0a4" font-size="12" text-anchor="middle">MT22 / TEROS 12</text>
+  <circle cx="500" cy="200" r="5" fill="#f2f2f2"/>
+  <circle cx="500" cy="225" r="5" fill="#e23b3b"/>
+  <circle cx="500" cy="250" r="5" fill="#b9a06a"/>
+
+  <path d="M258 170 C 360 170, 400 225, 500 225" stroke="#e23b3b" stroke-width="4" fill="none"/>
+  <path d="M266 200 C 360 200, 400 200, 500 200" stroke="#f2f2f2" stroke-width="4" fill="none"/>
+  <path d="M258 230 C 360 230, 400 250, 500 250" stroke="#b9a06a" stroke-width="4" fill="none"/>
+
+  <text x="300" y="300" fill="#e8efe9" font-size="13" font-weight="700">G1</text>
+  <text x="300" y="317" fill="#9fb0a4" font-size="12">Data (red)</text>
+  <text x="410" y="300" fill="#e8efe9" font-size="13" font-weight="700">5V</text>
+  <text x="410" y="317" fill="#9fb0a4" font-size="12">Power (white)</text>
+  <text x="520" y="300" fill="#e8efe9" font-size="13" font-weight="700">GND</text>
+  <text x="520" y="317" fill="#9fb0a4" font-size="12">Ground (bare)</text>
+
+  <text x="30" y="345" fill="#9fb0a4" font-size="12">Set sdi12_data_pin to GPIO1. Power from 5V, not 3.3V.</text>
+</svg>

@@ -1,0 +1,72 @@
+name: Build firmware
+
+# Compiles the firmware for every board. On a tagged release it
+# attaches the binaries to the release so people can download and
+# flash them from the browser. On a normal push it just builds, so a
+# broken config gets caught early.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "esphome/**"
+      - ".github/workflows/build-firmware.yml"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - board: atom-lite
+            file: esphome/factory/tdr-sensor-atom-lite-factory.yaml
+          - board: atom-s3
+            file: esphome/factory/tdr-sensor-atom-s3-factory.yaml
+          - board: atom-poe
+            file: esphome/factory/tdr-sensor-atom-poe-factory.yaml
+          - board: m5-dial
+            file: esphome/factory/tdr-sensor-m5-dial-factory.yaml
+          - board: esp32-generic
+            file: esphome/factory/tdr-sensor-esp32-generic-factory.yaml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ${{ matrix.board }}
+        id: build
+        uses: esphome/build-action@v7
+        with:
+          yaml-file: ${{ matrix.file }}
+          complete-manifest: true
+
+      # Name the files per board so five builds do not collide when
+      # they all land on the same release.
+      - name: Stage firmware
+        run: |
+          mkdir -p dist
+          cp "${{ steps.build.outputs.name }}/firmware.factory.bin" \
+             "dist/tdr-sensor-${{ matrix.board }}.factory.bin"
+          if [ -f "${{ steps.build.outputs.name }}/firmware.ota.bin" ]; then
+            cp "${{ steps.build.outputs.name }}/firmware.ota.bin" \
+               "dist/tdr-sensor-${{ matrix.board }}.ota.bin"
+          fi
+          ls -la dist
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdr-sensor-${{ matrix.board }}
+          path: dist
+          retention-days: 30
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

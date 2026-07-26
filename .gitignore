@@ -1,0 +1,13 @@
+# Secrets never get committed
+secrets.yaml
+**/secrets.yaml
+
+# ESPHome build output
+.esphome/
+**/.esphome/
+
+# Python
+__pycache__/
+*.pyc
+
+.DS_Store
