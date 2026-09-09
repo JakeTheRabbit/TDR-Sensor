@@ -1,0 +1,29 @@
+body.guide header { max-width: 960px; padding-bottom: 28px; }
+body.guide h1 { font-size: clamp(36px, 5.5vw, 60px); line-height: 1.12; }
+body.guide main { max-width: 960px; padding-bottom: 48px; }
+.guide-content { background: white; border: 1px solid var(--line); border-radius: 10px; padding: clamp(20px, 4vw, 40px); overflow-wrap: anywhere; }
+.guide-content h2 { margin-top: 38px; scroll-margin-top: 24px; }
+.guide-content h3 { margin-top: 28px; scroll-margin-top: 24px; }
+.guide-content li { margin-bottom: 9px; }
+.guide-content img { max-width: 100%; height: auto; }
+.guide-content table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: 14px; margin: 24px 0; }
+.guide-content th, .guide-content td { border: 1px solid var(--line); padding: 10px 12px; text-align: left; vertical-align: top; }
+.guide-content th { background: #e2eee6; }
+.guide-content pre { overflow-x: auto; padding: 20px; background: #f4f3ee; border-radius: 6px; line-height: 1.5; font-size: 13px; }
+.guide-content code { font-size: 0.9em; }
+.guide-content blockquote { margin-left: 0; padding-left: 20px; border-left: 3px solid var(--green); color: var(--muted); }
+.guide-content > :first-child { margin-top: 0; }
+.guide-list { list-style: none; padding: 0; }
+.guide-list li { border-bottom: 1px solid var(--line); padding: 12px 0; }
+.guide-list a { font-weight: 650; }
+@media print {
+  @page { size: auto; margin: 15mm; }
+  body.guide { background: white; font-size: 11pt; }
+  body.guide > header, body.guide > main { display: block !important; max-width: none; padding: 0; }
+  body.guide header nav, body.guide footer, body.guide .brand { display: none !important; }
+  body.guide h1 { font-size: 26pt; }
+  body.guide h2 { font-size: 20pt; break-after: avoid; }
+  .guide-content { border: 0; padding: 0; }
+  .guide-content table { display: table; width: 100%; font-size: 9pt; }
+  .guide-content pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+}

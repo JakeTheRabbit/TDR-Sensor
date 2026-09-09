@@ -2,7 +2,9 @@
 
 An ESPHome reader for the **INFWIN MT22A SDI-12** substrate probe, with checked water-content calibration, bulk EC, temperature and observed dryback trends. Runs locally on ESP32/M5Stack hardware with a web page, Home Assistant, optional MQTT and CSV logging.
 
-**Start with the [substrate and calibration setup desk](tools/setup/index.html)**: download this repository ZIP, extract it and open that file in a browser. It works offline and covers cubes, cubes on shared slabs, coco containers, metric/custom sizes, weighed calibration records and an actual-size printable placement sheet.
+**Open the [live substrate and calibration setup desk](https://jaketherabbit.github.io/TDR-Sensor/).** It covers cubes, cubes on shared slabs, coco containers, metric/custom sizes, weighed calibration records and an actual-size printable placement sheet. The [field guides](https://jaketherabbit.github.io/TDR-Sensor/guides/) are readable on the site too.
+
+For offline use, download this repository ZIP, extract it and open [tools/setup/index.html](tools/setup/index.html) in a browser. Calculator entries stay in your browser; the site does not connect to or control a sensor.
 
 ![MT22 placement on a three-plant slab](docs/img/mt22-placement.svg)
 
