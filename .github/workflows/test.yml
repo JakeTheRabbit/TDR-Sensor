@@ -21,3 +21,4 @@ jobs:
       - run: node --test tests/calculator.test.js
       - run: python tests/test_firmware.py
       - run: python tests/test_repository.py
+      - run: python tests/test_logger.py

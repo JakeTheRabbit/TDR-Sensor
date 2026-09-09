@@ -83,3 +83,6 @@ esphome compile esphome/factory/tdr-sensor-atom-lite-factory.yaml
 ```
 
 The logger reads the local web event stream. See [VALIDATION.md](docs/VALIDATION.md) for dependencies and test scope. The existing [root-zone measurement paper](https://jaketherabbit.github.io/cannabis-white-papers/root-zone-teros12.html) provides additional discussion; hardware specifications and calibration limits for this implementation are documented in [SOURCES.md](docs/SOURCES.md).
+
+
+CSV logging: wide format now records each field's observation age, blanks readings after `--max-age` (default 120 seconds) or a disconnected stream, and refuses to append a mismatched header. Start a new CSV after upgrading. Use long format for entities that appear after the initial snapshot; wide mode warns rather than silently dropping new columns. Adjust maximum age to the actual reporting cadence, not the desired irrigation interval.

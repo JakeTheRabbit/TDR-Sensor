@@ -71,3 +71,6 @@ wifi:
 ESPHome requires a valid 32-byte base64 API key. Generate one locally or through ESPHome's documented key generator; do not copy somebody else's key. The PoE node excludes Wi-Fi settings. Factory configs intentionally omit deployment credentials to support provisioning; an uncredentialed web page exposes calibration controls on the local network. Add credentials when adopting it.
 
 For MQTT, uncomment the `tdr_mqtt.yaml` package and fill in `mqtt_broker`, `mqtt_username` and `mqtt_password` in secrets. The existing CSV logger currently supports an unauthenticated local web event stream; use Home Assistant/MQTT logging if you enable web authentication, unless you extend the logger's authentication support.
+
+
+CSV logging: wide format now records each field's observation age, blanks readings after `--max-age` (default 120 seconds) or a disconnected stream, and refuses to append a mismatched header. Start a new CSV after upgrading. Use long format for entities that appear after the initial snapshot; wide mode warns rather than silently dropping new columns. Adjust maximum age to the actual reporting cadence, not the desired irrigation interval.

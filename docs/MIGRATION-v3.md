@@ -21,3 +21,6 @@ Version 3 changes measurement meaning. Build and inspect it on a spare node firs
 Use [CALIBRATION.md](CALIBRATION.md) and the [offline setup desk](../tools/setup/index.html). Default polling is now 30 seconds, with a 90-second data timeout and a ten-sample capture window (about five minutes). If changing poll cadence, update both timeout substitutions consistently and leave time for the SDI-12 response cycle.
 
 Before relying on a threshold, verify stable wet/dry readings in the actual medium, check a third independently weighed point, test a disconnected sensor, inspect the calibration status and verify delivered irrigation physically. The software tests and firmware builds do not establish agronomic accuracy or electrical compatibility for your installation.
+
+
+CSV logging: wide format now records each field's observation age, blanks readings after `--max-age` (default 120 seconds) or a disconnected stream, and refuses to append a mismatched header. Start a new CSV after upgrading. Use long format for entities that appear after the initial snapshot; wide mode warns rather than silently dropping new columns. Adjust maximum age to the actual reporting cadence, not the desired irrigation interval.

@@ -35,9 +35,9 @@ jobs:
           BOARD: ${{ matrix.board }}
         run: |
           mkdir -p dist
-          cp "$BUILD_NAME/firmware.factory.bin" "dist/tdr-sensor-$BOARD.factory.bin"
-          if [ -f "$BUILD_NAME/firmware.ota.bin" ]; then
-            cp "$BUILD_NAME/firmware.ota.bin" "dist/tdr-sensor-$BOARD.ota.bin"
+          cp "$BUILD_NAME/$BUILD_NAME.factory.bin" "dist/tdr-sensor-$BOARD.factory.bin"
+          if [ -f "$BUILD_NAME/$BUILD_NAME.ota.bin" ]; then
+            cp "$BUILD_NAME/$BUILD_NAME.ota.bin" "dist/tdr-sensor-$BOARD.ota.bin"
           fi
       - uses: actions/upload-artifact@v4
         with:
