@@ -1,120 +1,72 @@
-# TDR Sensor dashboard
-# -------------------------------------------------------------------
-# Paste this into a new dashboard: Settings -> Dashboards -> Add
-# dashboard -> Edit -> three dots -> Raw configuration editor.
-#
-# The entity ids below assume the device name is "tdr-sensor", which
-# gives ids like sensor.tdr_sensor_vwc. If you renamed the node,
-# find and replace tdr_sensor with your name.
-
+# Replace tdr_sensor with the actual entity prefix after checking the entity registry.
 title: TDR Sensor
 views:
   - title: Substrate
     path: substrate
     icon: mdi:water-percent
     cards:
-      - type: horizontal-stack
-        cards:
-          - type: gauge
-            name: VWC
-            entity: sensor.tdr_sensor_vwc
-            unit: "%"
-            min: 0
-            max: 100
-            severity:
-              green: 45
-              yellow: 25
-              red: 0
-          - type: gauge
-            name: Pore EC
-            entity: sensor.tdr_sensor_pore_ec
-            unit: dS/m
-            min: 0
-            max: 12
-            severity:
-              green: 2
-              yellow: 8
-              red: 10
-          - type: gauge
-            name: Saturation
-            entity: sensor.tdr_sensor_saturation
-            unit: "%"
-            min: 0
-            max: 110
-
       - type: entities
-        title: Crop steering
+        title: Measurement quality
         entities:
-          - entity: sensor.tdr_sensor_steering_mode
-            name: Steering mode
-          - entity: sensor.tdr_sensor_steering_confidence
-            name: Confidence
-          - entity: sensor.tdr_sensor_steering_index
-            name: Steering index
-          - entity: sensor.tdr_sensor_dryback_percent
-            name: Dryback now
-          - entity: sensor.tdr_sensor_max_dryback_today
-            name: Max dryback today
-          - entity: sensor.tdr_sensor_overnight_dryback
-            name: Overnight dryback
-          - entity: binary_sensor.tdr_sensor_irrigating
-            name: Irrigating
-
+          - binary_sensor.tdr_sensor_vwc_ready
+          - binary_sensor.tdr_sensor_sensor_data_fresh
+          - sensor.tdr_sensor_calibration_status
+          - sensor.tdr_sensor_raw_sample_age
       - type: entities
-        title: Irrigation
+        title: Root-zone observations
         entities:
-          - entity: sensor.tdr_sensor_irrigations_today
-            name: Shots today
-          - entity: sensor.tdr_sensor_time_since_irrigation
-            name: Time since last shot
-          - entity: sensor.tdr_sensor_last_shot_size
-            name: Last shot size
-          - entity: sensor.tdr_sensor_peak_vwc
-            name: Peak VWC
-          - entity: sensor.tdr_sensor_trough_vwc
-            name: Trough VWC
-          - entity: sensor.tdr_sensor_ec_stacking
-            name: EC stacking since field capacity
-
+          - sensor.tdr_sensor_vwc
+          - sensor.tdr_sensor_wet_reference_index
+          - sensor.tdr_sensor_bulk_ec_25c
+          - sensor.tdr_sensor_temperature
+          - sensor.tdr_sensor_water_trend
+          - sensor.tdr_sensor_dryback
+          - sensor.tdr_sensor_dryback_percent
+          - sensor.tdr_sensor_detected_wettings_today
+          - sensor.tdr_sensor_last_detected_rise
       - type: history-graph
-        title: VWC over time
+        title: Checked VWC
         hours_to_show: 48
         entities:
-          - entity: sensor.tdr_sensor_vwc
-          - entity: sensor.tdr_sensor_peak_vwc
-          - entity: binary_sensor.tdr_sensor_irrigating
-
+          - sensor.tdr_sensor_vwc
+          - sensor.tdr_sensor_peak_vwc
+          - sensor.tdr_sensor_trough_vwc
       - type: history-graph
-        title: Pore EC over time
+        title: Bulk EC at 25 C
         hours_to_show: 48
         entities:
-          - entity: sensor.tdr_sensor_pore_ec
-          - entity: sensor.tdr_sensor_pore_ec_24h_average
-
+          - sensor.tdr_sensor_bulk_ec_25c
   - title: Calibration
     path: calibration
     icon: mdi:tune
     cards:
+      - type: markdown
+        content: >-
+          Save a wet reference for an index. For actual VWC, capture weighed A/B
+          and a separately weighed C check. Follow the repository calibration
+          guide; an index of 100 is not 100% VWC.
       - type: entities
-        title: Substrate and VWC
+        title: Prepare and capture
         entities:
-          - entity: select.tdr_sensor_substrate_profile
-          - entity: number.tdr_sensor_field_capacity
-          - entity: number.tdr_sensor_vwc_gain
-          - entity: number.tdr_sensor_vwc_offset
-          - entity: number.tdr_sensor_saturated_reference
-          - entity: button.tdr_sensor_capture_dry_point
-          - entity: button.tdr_sensor_capture_saturated_point
-          - entity: button.tdr_sensor_apply_vwc_calibration
-          - entity: button.tdr_sensor_reset_to_substrate_defaults
-
+          - select.tdr_sensor_substrate_profile
+          - switch.tdr_sensor_calibration_mode
+          - binary_sensor.tdr_sensor_capture_ready
+          - sensor.tdr_sensor_capture_raw_average
+          - sensor.tdr_sensor_capture_raw_spread
+          - button.tdr_sensor_save_wet_reference
+          - number.tdr_sensor_weighed_reference_vwc
+          - button.tdr_sensor_capture_weighed_point_a
+          - button.tdr_sensor_capture_weighed_point_b
+          - button.tdr_sensor_check_independent_weighed_point_c
+          - sensor.tdr_sensor_third_point_error
+          - sensor.tdr_sensor_last_calibration_action
       - type: entities
-        title: EC
+        title: Saved references
         entities:
-          - entity: number.tdr_sensor_ec_gain
-          - entity: number.tdr_sensor_ec_offset
-          - entity: number.tdr_sensor_ec_reference_solution
-          - entity: number.tdr_sensor_hilhorst_e0
-          - entity: number.tdr_sensor_pore_ec_blend_low
-          - entity: number.tdr_sensor_pore_ec_blend_high
-          - entity: button.tdr_sensor_calibrate_ec_to_reference
+          - sensor.tdr_sensor_saved_wet_raw
+          - sensor.tdr_sensor_saved_a_raw
+          - sensor.tdr_sensor_saved_a_vwc
+          - sensor.tdr_sensor_saved_b_raw
+          - sensor.tdr_sensor_saved_b_vwc
+          - sensor.tdr_sensor_saved_check_raw
+          - sensor.tdr_sensor_saved_check_vwc

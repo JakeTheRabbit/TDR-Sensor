@@ -55,14 +55,21 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--port", type=int, default=80, help="Web server port (default 80)"
     )
-    return p.parse_args()
+    p.add_argument("--max-age", type=float, default=120.0,
+                   help="Blank wide readings older than this many seconds (default 120)")
+    args = p.parse_args()
+    if not __import__('math').isfinite(args.interval) or args.interval <= 0:
+        p.error("--interval must be a finite positive number")
+    if not __import__('math').isfinite(args.max_age) or args.max_age <= 0:
+        p.error("--max-age must be a finite positive number")
+    return args
 
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
 
-def iter_events(url: str):
+def iter_events(url: str, on_disconnect=None):
     """Yield (event_name, data_dict) from an SSE stream.
 
     Reconnects on its own if the connection drops.
@@ -87,7 +94,13 @@ def iter_events(url: str):
                         except json.JSONDecodeError:
                             continue
                         yield event, data
+            # A clean EOF is still a disconnected stream.
+            if on_disconnect:
+                on_disconnect()
+            time.sleep(5)
         except (urllib.error.URLError, ConnectionError, TimeoutError, OSError) as err:
+            if on_disconnect:
+                on_disconnect()
             print(f"[{now_iso()}] connection lost ({err}), retrying in 5s",
                   file=sys.stderr)
             time.sleep(5)
@@ -129,49 +142,90 @@ def run_long(url: str, out_path: str) -> None:
             fh.flush()
 
 
-def run_wide(url: str, out_path: str, interval: float) -> None:
+class ReadingBuffer:
+    """Values retain observation times; a broken stream cannot look live."""
+    def __init__(self):
+        self.latest = {}
+        self.online = False
+
+    def update(self, key, value, received):
+        self.latest[key] = (value, received)
+        self.online = True
+
+    def disconnect(self):
+        self.online = False
+
+    def snapshot(self, columns, now, max_age):
+        row = []
+        for key in columns:
+            value, received = self.latest.get(key, ("", None))
+            age = None if received is None else max(0.0, now - received)
+            valid = self.online and age is not None and age <= max_age
+            row.extend([value if valid else "", round(age, 1) if age is not None else ""])
+        return row
+
+
+def wide_header(columns):
+    return ["timestamp", "stream_connected"] + [item for c in columns for item in (c, c + "__age_s")]
+
+
+def validate_append_header(path, header):
+    """Do not append a different column order/meaning to an existing CSV."""
+    import os
+    if os.path.exists(path) and os.path.getsize(path):
+        with open(path, newline="", encoding="utf-8") as fh:
+            if next(csv.reader(fh), None) != header:
+                raise ValueError("Existing CSV header differs. Choose a new --out file.")
+
+
+def run_wide(url: str, out_path: str, interval: float, max_age: float = 120.0) -> None:
     import os
     import threading
 
-    latest: dict[str, object] = {}
+    readings = ReadingBuffer()
     lock = threading.Lock()
 
+    def disconnected():
+        with lock:
+            readings.disconnect()
+
     def reader() -> None:
-        for event, data in iter_events(url):
+        for event, data in iter_events(url, on_disconnect=disconnected):
             if event not in ("state", "message"):
                 continue
             key = sensor_key(data)
-            if key is None:
-                continue
-            with lock:
-                latest[key] = numeric_value(data)
+            if key is not None:
+                with lock:
+                    readings.update(key, numeric_value(data), time.monotonic())
 
-    t = threading.Thread(target=reader, daemon=True)
-    t.start()
-
-    # Wait for the first sweep of sensors so the header is complete.
+    threading.Thread(target=reader, daemon=True).start()
     print(f"[{now_iso()}] collecting sensors for {min(interval, 15):.0f}s...")
     time.sleep(min(interval, 15))
-
     with lock:
-        columns = sorted(latest.keys())
+        columns = sorted(readings.latest)
     if not columns:
-        print("No sensors seen yet. Is the host right and the device up?",
-              file=sys.stderr)
-
+        raise RuntimeError("No sensor events received. Check the host/connection and retry; no CSV was created.")
+    header = wide_header(columns)
+    validate_append_header(out_path, header)
     new_file = not os.path.exists(out_path) or os.path.getsize(out_path) == 0
+    reported_new = set()
     with open(out_path, "a", newline="", encoding="utf-8") as fh:
         writer = csv.writer(fh)
         if new_file:
-            writer.writerow(["timestamp"] + columns)
+            writer.writerow(header)
             fh.flush()
-        print(f"[{now_iso()}] logging (wide) to {out_path} every {interval:.0f}s, "
-              f"Ctrl-C to stop")
+        print(f"[{now_iso()}] logging (wide) to {out_path}; readings older than {max_age:g}s are blank")
         while True:
             time.sleep(interval)
             with lock:
-                row = [latest.get(c, "") for c in columns]
-            writer.writerow([now_iso()] + row)
+                new_columns = set(readings.latest) - set(columns) - reported_new
+                connected = readings.online
+                row = readings.snapshot(columns, time.monotonic(), max_age)
+            if new_columns:
+                print("New entities are outside the fixed CSV header: " + ", ".join(sorted(new_columns)) +
+                      ". Restart with a new file or use long format to include them.", file=sys.stderr)
+                reported_new.update(new_columns)
+            writer.writerow([now_iso(), int(connected)] + row)
             fh.flush()
 
 
@@ -186,7 +240,7 @@ def main() -> int:
     signal.signal(signal.SIGINT, handle_sigint)
 
     if args.wide:
-        run_wide(url, args.out, args.interval)
+        run_wide(url, args.out, args.interval, args.max_age)
     else:
         run_long(url, args.out)
     return 0

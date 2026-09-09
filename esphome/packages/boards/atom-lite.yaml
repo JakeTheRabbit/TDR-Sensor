@@ -1,6 +1,6 @@
 # M5Stack Atom Lite board package
 # Onboard SK6812 LED on GPIO27, button on GPIO39, Grove port G26/G32.
-# The LED shows steering state at a glance:
+# The LED shows measurement state at a glance:
 #   blue   = irrigation in progress
 #   green  = drying, before dryback target
 #   orange = dryback target reached
@@ -56,7 +56,9 @@ interval:
             return;
           }
           float r = 0.0f, g = 0.0f, b = 0.0f;
-          if (id(g_phase) == 1) {
+          if (!id(vwc_ready).state) {
+            r = 0.65f; b = 0.65f;  // Violet: uncalibrated, stale or calibrating.
+          } else if (id(g_phase) == 1) {
             b = 1.0f;
           } else {
             float p = id(g_peak);

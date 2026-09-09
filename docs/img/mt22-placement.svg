@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 Z" fill="#087f8c"/></marker><pattern id="wool" width="20" height="20" patternUnits="userSpaceOnUse"><rect width="20" height="20" fill="#e1d5b4"/><path d="M1 5l8 4m-3 8l10 -5M13 2l4 6" stroke="#c3b78d" stroke-width="1"/></pattern></defs>
+<rect width="1600" height="1100" fill="#fff"/>
+<g font-family="Arial, sans-serif" fill="#153448">
+<text x="60" y="65" font-size="40" font-weight="700">MT22 in a Grodan Prestige slab</text>
+<text x="60" y="108" font-size="22">Three plants per 1 m slab | proposed repeatable midpoint placement</text>
+<rect x="45" y="140" width="970" height="490" rx="16" fill="#f5f8f9" stroke="#b8c9cd"/>
+<text x="70" y="180" font-size="25" font-weight="700">TOP VIEW</text>
+<text x="70" y="211" font-size="18">Example location beside the middle cube; not beneath its footprint.</text>
+<rect x="90" y="270" width="860" height="165" rx="7" fill="url(#wool)" stroke="#153448" stroke-width="3"/>
+<g fill="#fdfdfd" stroke="#667c83" stroke-width="2"><rect x="145" y="288" width="130" height="130"/><rect x="455" y="288" width="130" height="130"/><rect x="765" y="288" width="130" height="130"/></g>
+<g fill="#407a42" font-size="21" text-anchor="middle"><text x="210" y="353">PLANT 1</text><text x="520" y="353">PLANT 2</text><text x="830" y="353">PLANT 3</text></g>
+<!-- Three pins in the slab, all ending at the same depth, connected to flush body. -->
+<g stroke="#7b8589" stroke-width="5"><line x1="641" y1="435" x2="641" y2="377"/><line x1="667" y1="435" x2="667" y2="377"/><line x1="693" y1="435" x2="693" y2="377"/></g>
+<rect x="623" y="435" width="88" height="18" rx="2" fill="#b5bec5" stroke="#153448" stroke-width="2"/>
+<path d="M711 444 C780 444 765 505 850 505" fill="none" stroke="#26343d" stroke-width="7"/>
+<path d="M667 543V463" stroke="#087f8c" stroke-width="3" marker-end="url(#arrow)"/>
+<text x="430" y="574" font-size="22" font-weight="700">Long sensor body parallel to slab length</text>
+<text x="430" y="604" font-size="18">Rods go across the slab width, horizontally.</text>
+<text x="108" y="481" font-size="18">Keep clear of drain holes</text>
+<text x="108" y="507" font-size="18">and the slab end.</text>
+<rect x="1040" y="140" width="515" height="490" rx="16" fill="#f5f8f9" stroke="#b8c9cd"/>
+<text x="1065" y="180" font-size="25" font-weight="700">END CROSS-SECTION</text>
+<text x="1065" y="213" font-size="18">Only one pin is visible end-on.</text>
+<rect x="1075" y="280" width="300" height="150" fill="url(#wool)" stroke="#153448" stroke-width="2"/>
+<!-- Here 2 px/mm: 75 mm height, 53 mm penetration, 18 mm housing depth, 26 mm housing height. -->
+<rect x="1375" y="329" width="36" height="52" rx="3" fill="#b5bec5" stroke="#153448" stroke-width="2"/>
+<line x1="1375" y1="355" x2="1269" y2="355" stroke="#64727b" stroke-width="5"/>
+<path d="M1411 355H1510" stroke="#26343d" stroke-width="7"/>
+<line x1="1269" y1="318" x2="1375" y2="318" stroke="#087f8c" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+<text x="1281" y="304" font-size="19" font-weight="700">53 mm</text>
+<path d="M1400 470L1376 385" stroke="#087f8c" stroke-width="2" marker-end="url(#arrow)"/>
+<text x="1080" y="502" font-size="21" font-weight="700">Housing flush against rockwool</text>
+<text x="1080" y="533" font-size="18">No exposed rods or air gaps.</text>
+<text x="1080" y="567" font-size="18">75 mm slab: 37.5 mm above base</text>
+<text x="1080" y="596" font-size="18">100 mm slab: 50 mm above base</text>
+<rect x="45" y="654" width="1510" height="307" rx="16" fill="#fff" stroke="#b8c9cd"/>
+<text x="70" y="698" font-size="25" font-weight="700">SIDE FACE / TEMPLATE ALIGNMENT</text>
+<rect x="90" y="760" width="590" height="150" fill="url(#wool)" stroke="#153448" stroke-width="2"/>
+<rect x="297" y="809" width="176" height="52" rx="3" fill="#b5bec5" stroke="#153448" stroke-width="2"/>
+<line x1="90" y1="835" x2="680" y2="835" stroke="#087f8c" stroke-width="2" stroke-dasharray="8 5"/>
+<text x="325" y="844" font-size="20" font-weight="700">MT22</text>
+<text x="90" y="943" font-size="17">Base datum = bottom of actual rockwool, not the tray rim.</text>
+<text x="735" y="762" font-size="23" font-weight="700">All three pin centres on one horizontal line</text>
+<text x="735" y="805" font-size="21">Body contact face: 88 mm long x 26 mm high</text>
+<text x="735" y="846" font-size="20">Use the real sensor to transfer its pin spacing.</text>
+<text x="735" y="881" font-size="20">Remove the paper before inserting into rockwool.</text>
+<text x="735" y="925" font-size="18">Rod spacing here is illustrative, not a machining dimension.</text>
+<text x="60" y="1006" font-size="20" font-weight="700">Print the separate A4 template at Actual size / 100%; verify both 100 mm check bars.</text>
+<text x="60" y="1041" font-size="18">Manufacturer-verified: housing dimensions and rod length. Proposed: midpoint height and location.</text>
+<text x="60" y="1073" font-size="17">This explanatory drawing is not to scale. The placement PDF contains the 1:1 registration guides.</text>
+</g></svg>

@@ -1,58 +1,51 @@
 # TDR Sensor
 
-A WiFi substrate sensor for crop steering. It reads an SDI-12 moisture probe, works out water content, pore EC and temperature, and runs a full set of dryback and steering analytics on the device itself. No cloud, no subscription. Flash it from your browser, open its web page, and read your root zone.
+An ESPHome reader for the **INFWIN MT22A SDI-12** substrate probe, with checked water-content calibration, bulk EC, temperature and observed dryback trends. Runs locally on ESP32/M5Stack hardware with a web page, Home Assistant, optional MQTT and CSV logging.
 
-Built for rockwool and coco, tuned against the METER TEROS 12 calibration, runs on cheap M5Stack hardware and a clone probe that costs a fraction of a branded system.
+**Start with the [substrate and calibration setup desk](tools/setup/index.html)**: download this repository ZIP, extract it and open that file in a browser. It works offline and covers cubes, cubes on shared slabs, coco containers, metric/custom sizes, weighed calibration records and an actual-size printable placement sheet.
 
-## What it does
+![MT22 placement on a three-plant slab](docs/img/mt22-placement.svg)
 
-- Reads VWC, pore water EC, bulk EC and substrate temperature over SDI-12
-- Full calibration suite you set from the web page, no reflashing: substrate profiles, two point VWC calibration, single point EC calibration, and every coefficient exposed
-- On-device crop steering analytics: peak, trough, dryback in points and percent, dryback rate, shot detection, EC stacking, saturation, and more
-- Steering detection that reads whether the plant is being driven vegetative or generative from how the substrate behaves
-- Its own web page with live readings and history, so you need nothing else
-- MQTT for Mycodo, Node-RED, Grafana or anything else that speaks it
-- Native Home Assistant integration with auto-discovery, blueprints and a dashboard
-- CSV logging straight off the device with a small Python script
+## What changed in v3
 
-## Which board and probe
+- A saturated/drained capture saves a **wet-reference index**, not an invented 100% VWC.
+- Headline VWC requires **two weighed points and an independent third-point check**. It is withheld during calibration, outside the fitted range and when data is stale.
+- RAW, generic VWC, weighed estimates, bulk EC and optional modelled pore EC are distinguished. The unsupported bulk/VWC–Hilhorst blend has been removed.
+- Cube + shared-slab volume is calculated once and allocated per plant. Real metric block sizes are used, including the nominal six-inch Hugo at about 3.2 L.
+- Measured trends replace claims of vegetative/generative state or physiological confidence. Plateau detection, freshness and calibration-history resets are fixed.
+- Firmware dependencies and CI use explicit versions. Host tests execute the actual calibration and analytics code extracted from the YAML.
 
-Boards, any one of these:
+Existing users: read [the v3 migration notes](docs/MIGRATION-v3.md) before upgrading. Old calibration values are not silently promoted into checked VWC.
 
-- M5Stack Atom Lite, the cheap and common pick
-- M5Stack AtomS3 Lite
-- M5Stack Atom PoE, for wired ethernet with power down the same cable
-- M5Stack Dial, which has a round screen that shows the readings
-- Any generic ESP32 dev board
+## Choose a path
 
-Probe: an Infiwin MT22A is the value pick and what this is built around. A genuine METER TEROS 12 if you want the reference. Full buying guide, including who actually makes what, is in [docs/SENSORS.md](docs/SENSORS.md).
+| Task | Guide |
+|---|---|
+| Work out cube, slab-share or coco volume | [Substrates and sizes](docs/SUBSTRATES.md) · [offline calculator](tools/setup/index.html) |
+| Place the probe / print a template | [Placement](docs/PLACEMENT.md) · [A4 75/100 mm slab PDF](docs/print/MT22-placement-template-A4-actual-size.pdf) |
+| Save a wet reference or calibrate with weights | [Calibration procedure](docs/CALIBRATION.md) |
+| Build a device config / enable MQTT | [Configuration](docs/CONFIG.md) |
+| Connect the hardware | [Wiring](docs/WIRING.md) · [sensor compatibility](docs/SENSORS.md) |
+| Integrate with Home Assistant | [Dashboard and guarded shot requests](docs/HOMEASSISTANT.md) |
+| Resolve unavailable readings | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+| Assess the claims and limits | [Sources](docs/SOURCES.md) · [validation](docs/VALIDATION.md) |
 
-## Install the easy way, no software
+## ESPHome installation
 
-Pre-built firmware flashes straight from your browser using ESPHome's own web flasher. Nothing to install, no ESPHome, no command line.
-
-1. Download the `.factory.bin` for your board from the [Releases page](https://github.com/JakeTheRabbit/TDR-Sensor/releases).
-2. Plug your board in over USB.
-3. Go to [web.esphome.io](https://web.esphome.io) in Chrome, Edge or Opera on a desktop, and click **CONNECT**.
-4. Click **Install**, not "Prepare for first use". Choose the file you downloaded and let it flash.
-5. Enter your WiFi when it offers, then open `http://tdr-sensor.local` to see your readings.
-
-Full step by step, driver notes, and a fallback flasher if that page will not talk to your board: [docs/FLASHING.md](docs/FLASHING.md).
-
-## Install with ESPHome
-
-If you want to change the config or update over WiFi, run it through ESPHome instead. Your config is about ten lines that pull the packages from this repo, so fixes and new features come down when you rebuild:
+Build with **ESPHome 2026.8.2**, the tested version. Clone/download the repo, copy `esphome/secrets.yaml.example` to `esphome/secrets.yaml`, enter your own values, and use the device YAML for your board. See [CONFIG.md](docs/CONFIG.md). Nothing in this repository flashes an existing node automatically.
 
 ```yaml
 substitutions:
   name: tdr-sensor
+  friendly_name: TDR Sensor
   sdi12_data_pin: GPIO26
+  sdi12_address: "0"
+  sample_interval: 30s
 
 packages:
   tdr:
     url: https://github.com/JakeTheRabbit/TDR-Sensor
-    ref: main
-    refresh: 1d
+    ref: main  # Pin a reviewed commit SHA for a production build.
     files:
       - esphome/packages/boards/atom-lite.yaml
       - esphome/packages/tdr_sdi12_core.yaml
@@ -68,99 +61,28 @@ ota:
   - platform: esphome
 ```
 
-The full config for every board, the self-contained version, MQTT, and how to pin a version are all in [docs/CONFIG.md](docs/CONFIG.md).
+Optional API encryption, OTA password, web credentials and fallback-AP credentials belong in your own secrets file; [examples are in CONFIG.md](docs/CONFIG.md). Public factory images contain no private credentials. Use a trusted local network for provisioning.
 
-## Wiring
+Supported board configurations: Atom Lite (GPIO26), AtomS3 Lite (GPIO1), Atom PoE (GPIO26), M5 Dial (GPIO2), and generic ESP32 (GPIO16). These are build targets; physical wiring and probe accuracy require installation checks. PoE uses Ethernet and excludes the Wi-Fi package. See the [flashing guide](docs/FLASHING.md) for prebuilt releases; older releases may still contain v2 behaviour until a v3 release is published.
 
-Read [docs/WIRING.md](docs/WIRING.md) before you connect anything. The short version: the probe has three wires, data goes to the pin your board uses, power to 5V, ground to ground. The catch is that wire colours are not the same between sensor brands. On the Infiwin MT22 the red wire is data, not power, so wiring it by habit puts 5V on the data line. Check it against the colour table.
+## Measurements, trends and control
 
-## Calibration
+The web page exposes raw counts, temperature, bulk EC at 25°C, wet-reference index and calibration controls. Once checked VWC is available, the optional analytics package tracks peak/trough VWC, dryback in percentage points and percent of peak, a rolling drying slope, and detected wetting events. A wetting event is not proof that a valve opened or that a known volume reached the plants. Runtime history resets when measurement continuity is lost.
 
-The sensor reads usefully out of the box, but for real work you calibrate it in your own substrate. It is a ten minute job with a scale and a bucket, done entirely from the web page. Step by step for rockwool and coco in [docs/CALIBRATION.md](docs/CALIBRATION.md).
+One probe measures a local region. There are no universal cube/slab/coco VWC targets, and no claim that a substrate curve measures plant water stress, yield or potency. The node itself does not drive irrigation. The Home Assistant example requests an independently bounded controller shot only after explicit enabling and valid readings.
 
-## The analytics, and what they tell you
+Bulk EC is the primary EC output. The optional Hilhorst pore-EC estimate is experimental and starts disabled. Calibrating a wet reference or bulk EC does not validate a pore-water model.
 
-Everything below runs on the device, updates live, and shows on the web page and in Home Assistant.
+## Logging and development
 
-- Peak and trough VWC, with the time each happened
-- Dryback since the last peak, both in points and as a percent of the peak
-- Dryback rate in percent per hour, over a rolling hour
-- Max dryback today and overnight dryback
-- Rolling 24 hour min, max and average for VWC and pore EC
-- Shots today, time since the last irrigation, and an irrigating flag, all from a shot detector that watches for the substrate rising then plateauing
-- Pore EC captured at field capacity, and EC stacking, the rise in root zone EC since that point
-- Saturation against field capacity
-- Field capacity learned automatically from the seven day peak, as a cross-check on your manual figure
-- A sensor fault flag that trips if the probe stops answering or freezes
-
-### Steering detection
-
-The device works out whether your watering is pushing the plant vegetative or generative, from four signals: how big the drybacks are, how many shots a day, how much EC stacks through the day, and how much headroom there is between average VWC and field capacity. It combines them into a steering index from -1 to +1 and a plain label, Vegetative, Balanced or Generative, with a confidence. The thresholds are all settings you can move. It needs a few irrigation cycles before it will call anything, so it says Learning at first.
-
-This is a read on what the substrate behaviour implies, not a controller. It tells you what your irrigation is doing so you can decide what to change.
-
-## Data logging without Home Assistant
-
-There is a small Python script at [tools/tdr_logger.py](tools/tdr_logger.py) that subscribes to the device and writes CSV. Standard library only, nothing to install.
-
-```
+```sh
 python tools/tdr_logger.py 192.168.1.50 --wide --interval 60 --out grow.csv
+node --test tests/calculator.test.js
+python tests/test_firmware.py
+esphome compile esphome/factory/tdr-sensor-atom-lite-factory.yaml
 ```
 
-That writes a row a minute with a column per sensor. Drop the flags for a row per reading as they arrive.
+The logger reads the local web event stream. See [VALIDATION.md](docs/VALIDATION.md) for dependencies and test scope. The existing [root-zone measurement paper](https://jaketherabbit.github.io/cannabis-white-papers/root-zone-teros12.html) provides additional discussion; hardware specifications and calibration limits for this implementation are documented in [SOURCES.md](docs/SOURCES.md).
 
-## Home Assistant
 
-The node is a native ESPHome device, so Home Assistant discovers it on its own, no custom component and no HACS. Two automation blueprints ship with it, dryback-triggered irrigation and an EC alert, plus a ready dashboard. Full guide, and an honest note on what HACS does and does not do, in [docs/HOMEASSISTANT.md](docs/HOMEASSISTANT.md).
-
-## Troubleshooting
-
-If the device runs but every reading is unknown, the probe is not talking to the board, and that has a short list of causes. Start with [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
-
-## Repository layout
-
-```
-esphome/
-  tdr-sensor-*.yaml            device files, one per board
-  packages/
-    tdr_sdi12_core.yaml        SDI-12 read plus the whole calibration pipeline
-    tdr_analytics.yaml         dryback, irrigation and steering analytics
-    tdr_mqtt.yaml              optional MQTT
-    wifi_extras.yaml           fallback hotspot and diagnostics
-    boards/                    one file per board with its pins and LED
-  import/                      minimal configs for adopting pre-built firmware
-  factory/                     what CI builds into the browser-flashable firmware
-tools/
-  tdr_logger.py                CSV logger over the device event stream
-blueprints/automation/         Home Assistant blueprints
-lovelace/dashboard.yaml        Home Assistant dashboard
-docs/                          flashing, config, wiring, calibration, sensors, HA
-.github/workflows/             builds firmware for every board, attaches it to releases
-```
-
-## What changed from the original config
-
-This is a rebuild of the earlier single-file config. What moved and why:
-
-- Restructured into packages so a device config is a handful of lines and updates pull from GitHub.
-- Bulk EC at 25C is now actually temperature-normalised. The old config had a sensor named for it that only divided the raw number, so it did nothing. It defaults to off because the MT22 already normalises internally, and there is a coefficient to turn it on for probes that do not.
-- The Hilhorst pore EC model now includes the pore water permittivity temperature term from the METER manual, instead of a fixed constant. More accurate as substrate temperature moves.
-- The pore EC blend between the Hilhorst and mass balance models is now a pair of settings you can move, rather than hardcoded at 40 and 60 percent.
-- The VWC polynomial was checked against the TEROS 12 manual and is correct. Added the mineral soil curve and a custom polynomial option alongside the soilless one.
-- Added a median filter on the raw counts and a light smoothing filter on VWC, which kills the single-sample SDI-12 glitches that used to show as spikes.
-- The device no longer reboots itself every fifteen minutes when no Home Assistant is connected, so it runs happily standalone on just the web page or MQTT.
-- Web page upgraded to the sorted, grouped layout and bundled so it works with no internet.
-
-## Background reading
-
-If you want the theory behind what this thing is measuring, rather than how to wire it up, read [Root zone state estimation with the TEROS-12](https://jaketherabbit.github.io/cannabis-white-papers/root-zone-teros12.html). It covers how a capacitance probe turns an electric field into a water number, why the default calibration lies a little, what pore EC can and cannot tell you, and how to steer on the shape of the dryback instead of the absolute number. It is also honest about the limits, which is worth reading before you trust any single probe, including this one.
-
-The short version, and the reason the docs here keep repeating it: one probe sees about a litre of media. It is one local witness. Calibrate it, check the contact, and cross-check it against runoff or pot weight before you act on it.
-
-## Credits
-
-Calibration maths from the METER TEROS 11/12 manual. SDI-12 and half-duplex UART components by ssieb. Original inspiration from kromadg's soil-sensor project and the science-in-hydroponics writeups. Built by Legacy Ag.
-
-## License
-
-MIT. Use it, change it, sell what you grow with it.
+CSV logging: wide format now records each field's observation age, blanks readings after `--max-age` (default 120 seconds) or a disconnected stream, and refuses to append a mismatched header. Start a new CSV after upgrading. Use long format for entities that appear after the initial snapshot; wide mode warns rather than silently dropping new columns. Adjust maximum age to the actual reporting cadence, not the desired irrigation interval.

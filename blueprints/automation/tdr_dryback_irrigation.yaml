@@ -1,98 +1,100 @@
 blueprint:
-  name: TDR dryback-triggered irrigation
-  description: >
-    Fire an irrigation shot when the substrate has dried back past your
-    target. Reads the dryback percent from a TDR Sensor node, opens a
-    valve or pump for a set time, and only runs during the lights-on
-    window with a minimum gap between shots.
+  name: TDR checked dryback - bounded shot request
+  description: >-
+    Request one shot from a separate irrigation controller that enforces its
+    own maximum runtime. This blueprint never directly opens a valve. It needs
+    explicit enabling, checked VWC, fresh data and a recent numeric dryback
+    reading. A request does not prove delivery. See docs/HOMEASSISTANT.md.
   domain: automation
   source_url: https://github.com/JakeTheRabbit/TDR-Sensor/blob/main/blueprints/automation/tdr_dryback_irrigation.yaml
   input:
+    enable_helper:
+      name: Explicit irrigation enable
+      description: Use an input_boolean which starts off until commissioning is complete.
+      selector:
+        entity:
+          filter: {domain: input_boolean}
+    vwc_ready:
+      name: VWC ready
+      selector:
+        entity:
+          filter: {domain: binary_sensor}
+    data_fresh:
+      name: Sensor data fresh
+      selector:
+        entity:
+          filter: {domain: binary_sensor}
     dryback_sensor:
-      name: Dryback percent sensor
-      description: The "Dryback Percent" sensor from your TDR node.
+      name: Dryback Percent sensor
+      description: Select relative Dryback Percent (%), not Dryback (pp) or wet index.
       selector:
         entity:
-          filter:
-            domain: sensor
+          filter: {domain: sensor}
     dryback_threshold:
-      name: Dryback target
-      description: Shot fires when dryback rises above this percent.
-      default: 15
+      name: Operator-selected relative dryback threshold
+      description: No universal cube, slab or coco target is supplied.
       selector:
-        number:
-          min: 2
-          max: 40
-          step: 0.5
-          unit_of_measurement: "%"
-    irrigation_switch:
-      name: Irrigation valve or pump
-      description: The switch that runs water to this zone.
+        number: {min: 1, max: 50, step: 0.5, unit_of_measurement: '%', mode: box}
+    shot_button:
+      name: Bounded shot controller button
+      description: The controller must independently stop the shot if Home Assistant disconnects or restarts.
       selector:
         entity:
-          filter:
-            domain:
-              - switch
-              - input_boolean
-    shot_duration:
-      name: Shot duration
-      description: How long to run the valve, in seconds.
-      default: 30
-      selector:
-        number:
-          min: 1
-          max: 600
-          step: 1
-          unit_of_measurement: s
+          filter: {domain: button}
     start_time:
-      name: Lights on
-      description: Do not irrigate before this time.
-      default: "06:00:00"
-      selector:
-        time: {}
+      name: Allowed window starts
+      default: '06:00:00'
+      selector: {time: {}}
     end_time:
-      name: Lights off
-      description: Do not irrigate after this time.
-      default: "18:00:00"
-      selector:
-        time: {}
+      name: Allowed window ends
+      default: '18:00:00'
+      selector: {time: {}}
     min_interval:
-      name: Minimum gap between shots
-      description: Ignore new triggers for this many minutes after a shot.
+      name: Minimum gap between requests (minutes)
       default: 30
       selector:
-        number:
-          min: 1
-          max: 240
-          step: 1
-          unit_of_measurement: min
-
+        number: {min: 1, max: 240, step: 1, unit_of_measurement: min, mode: box}
+    max_age:
+      name: Maximum dryback report age (seconds)
+      default: 120
+      selector:
+        number: {min: 10, max: 600, step: 10, unit_of_measurement: s, mode: box}
 mode: single
 max_exceeded: silent
-
 variables:
-  min_interval: !input min_interval
-
+  dryback_entity: !input dryback_sensor
+  threshold: !input dryback_threshold
+  gap_minutes: !input min_interval
+  age_limit: !input max_age
 trigger:
-  - platform: numeric_state
-    entity_id: !input dryback_sensor
-    above: !input dryback_threshold
-
+  - platform: time_pattern
+    minutes: '/1'
 condition:
+  - condition: state
+    entity_id: !input enable_helper
+    state: 'on'
+  - condition: state
+    entity_id: !input vwc_ready
+    state: 'on'
+  - condition: state
+    entity_id: !input data_fresh
+    state: 'on'
   - condition: time
     after: !input start_time
     before: !input end_time
   - condition: template
-    value_template: >
-      {% set last = state_attr(this.entity_id, 'last_triggered') %}
-      {{ last is none or (as_timestamp(now()) - as_timestamp(last)) > (min_interval | int) * 60 }}
-
+    value_template: >-
+      {% set reading = states(dryback_entity) %}
+      {% set entity = states[dryback_entity] %}
+      {{ is_number(reading) and entity is not none
+         and (reading | float) >= (threshold | float)
+         and (reading | float) <= 100
+         and (as_timestamp(now()) - as_timestamp(entity.last_reported, 0)) <= (age_limit | float) }}
+  - condition: template
+    value_template: >-
+      {% set last = this.attributes.last_triggered | default(none) %}
+      {{ last is none or (as_timestamp(now()) - as_timestamp(last)) >= (gap_minutes | float) * 60 }}
 action:
-  - service: switch.turn_on
+  - action: button.press
     target:
-      entity_id: !input irrigation_switch
-  - delay:
-      seconds: !input shot_duration
-  - service: switch.turn_off
-    target:
-      entity_id: !input irrigation_switch
+      entity_id: !input shot_button

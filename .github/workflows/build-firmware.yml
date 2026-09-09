@@ -1,72 +1,60 @@
 name: Build firmware
-
-# Compiles the firmware for every board. On a tagged release it
-# attaches the binaries to the release so people can download and
-# flash them from the browser. On a normal push it just builds, so a
-# broken config gets caught early.
-
 on:
   push:
     branches: [main]
-    paths:
-      - "esphome/**"
-      - ".github/workflows/build-firmware.yml"
+    paths: ['esphome/**', '.github/workflows/build-firmware.yml']
+  pull_request:
+    paths: ['esphome/**', '.github/workflows/build-firmware.yml']
   release:
     types: [published]
   workflow_dispatch:
-
 permissions:
-  contents: write
-
+  contents: read
+concurrency:
+  group: firmware-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - board: atom-lite
-            file: esphome/factory/tdr-sensor-atom-lite-factory.yaml
-          - board: atom-s3
-            file: esphome/factory/tdr-sensor-atom-s3-factory.yaml
-          - board: atom-poe
-            file: esphome/factory/tdr-sensor-atom-poe-factory.yaml
-          - board: m5-dial
-            file: esphome/factory/tdr-sensor-m5-dial-factory.yaml
-          - board: esp32-generic
-            file: esphome/factory/tdr-sensor-esp32-generic-factory.yaml
+        board: [atom-lite, atom-s3, atom-poe, m5-dial, esp32-generic]
     steps:
       - uses: actions/checkout@v4
-
       - name: Build ${{ matrix.board }}
         id: build
         uses: esphome/build-action@v7
         with:
-          yaml-file: ${{ matrix.file }}
+          yaml-file: esphome/factory/tdr-sensor-${{ matrix.board }}-factory.yaml
+          version: '2026.8.2'
           complete-manifest: true
-
-      # Name the files per board so five builds do not collide when
-      # they all land on the same release.
       - name: Stage firmware
+        env:
+          BUILD_NAME: ${{ steps.build.outputs.name }}
+          BOARD: ${{ matrix.board }}
         run: |
           mkdir -p dist
-          cp "${{ steps.build.outputs.name }}/firmware.factory.bin" \
-             "dist/tdr-sensor-${{ matrix.board }}.factory.bin"
-          if [ -f "${{ steps.build.outputs.name }}/firmware.ota.bin" ]; then
-            cp "${{ steps.build.outputs.name }}/firmware.ota.bin" \
-               "dist/tdr-sensor-${{ matrix.board }}.ota.bin"
+          cp "$BUILD_NAME/$BUILD_NAME.factory.bin" "dist/tdr-sensor-$BOARD.factory.bin"
+          if [ -f "$BUILD_NAME/$BUILD_NAME.ota.bin" ]; then
+            cp "$BUILD_NAME/$BUILD_NAME.ota.bin" "dist/tdr-sensor-$BOARD.ota.bin"
           fi
-          ls -la dist
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: tdr-sensor-${{ matrix.board }}
           path: dist
           retention-days: 30
-
-      - name: Attach to release
-        if: github.event_name == 'release'
-        uses: softprops/action-gh-release@v2
+  release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
         with:
           files: dist/*
