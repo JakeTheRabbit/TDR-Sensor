@@ -18,4 +18,4 @@ output/playwright/
 /esphome/factory/.gitignore
 
 # Generated GitHub Pages site
-/_site/
+/_site*/

@@ -1,4 +1,4 @@
-# Calibrate without pretending saturation is 100% VWC
+# Calibrate the MT22
 
 There are two different tasks: saving a repeatable wet reference, and estimating actual volumetric water content from independent weights. Version 3 keeps them separate. All captures are available on the node's web page and in Home Assistant; calibration does not require reflashing.
 

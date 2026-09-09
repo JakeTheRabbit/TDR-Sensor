@@ -74,3 +74,31 @@ For MQTT, uncomment the `tdr_mqtt.yaml` package and fill in `mqtt_broker`, `mqtt
 
 
 CSV logging: wide format now records each field's observation age, blanks readings after `--max-age` (default 120 seconds) or a disconnected stream, and refuses to append a mismatched header. Start a new CSV after upgrading. Use long format for entities that appear after the initial snapshot; wide mode warns rather than silently dropping new columns. Adjust maximum age to the actual reporting cadence, not the desired irrigation interval.
+
+## Generate a configuration in the calculator
+
+The [setup wizard](../tools/setup/index.html#volume) exports the selected board,
+data pin, SDI-12 address, sampling cadence and substrate profile. It offers a
+sensor-settings report, a complete device YAML and a `secrets.yaml.example` file.
+Fill the secrets locally; the website never asks for them.
+
+The YAML pins the v3 packages. It adds **Apply wizard setup**, which explicitly
+sets the profile and capture/check limits and starts a new capture window. Saved
+ESPHome preferences take precedence over initial defaults, so press this button
+after installing the configuration when you want to apply those settings.
+
+If the wizard contains a valid recorded wet reference or checked A/B/C set, the
+export also adds **Import wizard references**. Use it only for the same physical
+probe, medium and placement. It requires Calibration mode, the expected profile,
+ten fresh readings and a stable RAW window. It replaces references only when
+pressed; rebooting never reimports them. Verify all saved values afterward,
+turn Calibration mode off, and wait ten seconds before disconnecting power.
+
+If references were already captured on the device at their original moisture
+levels, simply verify them against the wizard's report. Do not recapture old A/B/C
+values at a different current moisture level. Substrate litres belong in the
+volume record and steering app; they are not substituted for measured calibration.
+
+The wizard accepts the probe's actual address character. The pinned driver uses
+indices 0–9 for digits, 10–35 for a–z, and 36–61 for A–Z. The exporter performs that
+conversion; its YAML comment preserves the address character for comparison.

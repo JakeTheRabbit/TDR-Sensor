@@ -1,483 +1,153 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="description" content="Calculate cube, slab and coco substrate volume, record weighed sensor calibration, and print an MT22 placement template." />
-    <link rel="icon" href="favicon.svg" />
-    <title>TDR Sensor · Substrate & calibration desk</title>
-    <link rel="stylesheet" href="style.css" />
-    <script src="calculator.js" defer></script>
-    <script src="substrates.js" defer></script>
-    <script src="ui.js" defer></script>
-  </head>
-  <body>
-    <header>
-      <div class="brand">TDR SENSOR <span>FIELD TOOLS / 03</span></div>
-      <h1>Know the volume.<br />Measure the water.</h1>
-      <p>
-        A practical setup desk for blocks, shared slabs and coco. Everything
-        runs on this device; entries stay here.
-      </p>
-      <nav>
-        <a href="#volume">Substrate</a><a href="#weigh">Calibration</a
-        ><a href="#place">Placement & print</a
-        ><a href="../../docs/CALIBRATION.md">Full procedure ↗</a>
-      </nav>
-    </header>
-    <main>
-      <section id="volume">
-        <div class="eyebrow">01 / YOUR ROOT ZONE</div>
-        <h2>Substrate volume</h2>
-        <p>
-          Use physical growing-medium volume. A shared slab is counted once,
-          then divided between its plants.
-        </p>
-        <div class="grid">
-          <div class="panel">
-            <label
-              >Growing system<select id="system">
-                <option value="stack">Cubes on a shared slab</option>
-                <option value="cube">Cubes only</option>
-                <option value="slab">Slab only</option>
-                <option value="coco">Coco / peat container</option>
-              </select></label
-            >
-            <fieldset id="block-fields">
-              <legend>Block above each plant's root zone</legend>
-              <label>Block size<select id="block-preset"></select></label>
-              <div class="three">
-                <label
-                  >Length · cm<input
-                    id="bl"
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value="15" /></label
-                ><label
-                  >Width · cm<input
-                    id="bw"
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value="15" /></label
-                ><label
-                  >Height · cm<input
-                    id="bh"
-                    type="number"
-                    min="0.1"
-                    step="0.1"
-                    value="14.2"
-                /></label>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Configure substrate volume, place an MT22 probe, complete a guided calibration and export sensor settings or ESPHome YAML.">
+  <title>Substrate Calculator &amp; Sensor Calibration | TDR Sensor</title>
+  <link rel="icon" href="favicon.svg">
+  <link rel="stylesheet" href="style.css">
+  <script src="calculator.js" defer></script>
+  <script src="units.js" defer></script>
+  <script src="substrates.js" defer></script>
+  <script src="wizard.js" defer></script>
+  <script src="diagrams.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body class="calculator-page">
+  <header class="app-header">
+    <a class="app-brand" href="#volume" aria-label="TDR Sensor home"><svg viewBox="0 0 32 32" aria-hidden="true"><rect x="5" y="5" width="22" height="10" rx="2"/><path d="M9 15v13M16 15v13M23 15v13"/></svg><span>TDR <strong>Sensor</strong></span></a>
+    <nav class="utility-nav" aria-label="Resources"><a href="../../docs/CALIBRATION.md">Calibration guide</a><!-- ONLINE_GUIDES --><a href="https://github.com/JakeTheRabbit/TDR-Sensor">GitHub</a></nav>
+    <div class="unit-controls">
+      <div class="segmented" role="group" aria-label="Display units"><button type="button" id="metric" aria-pressed="true">Metric</button><button type="button" id="imperial" aria-pressed="false">Imperial</button></div>
+      <label id="gallon-wrap" hidden><span class="sr-only">Gallon standard</span><select id="gallon"><option value="US">US gallons</option><option value="UK">UK gallons</option></select></label>
+    </div>
+  </header>
+  <main class="app-main">
+    <div class="page-title"><div><h1>Substrate Calculator &amp; Sensor Calibration</h1><p>MT22 placement, water-content calibration and ESPHome configuration.</p></div><div class="project-actions"><span id="save-status" role="status">Saved on this browser</span><button type="button" class="text-button" id="save-project">Save setup</button><label class="text-button file-button">Load setup<input id="load-project" type="file" accept=".json,application/json" class="sr-only"></label></div></div>
+    <nav class="steps" aria-label="Setup steps">
+      <button type="button" data-step="0" aria-current="step"><span>1</span>Substrate</button>
+      <button type="button" data-step="1"><span>2</span>Sensor position</button>
+      <button type="button" data-step="2"><span>3</span>Calibration</button>
+      <button type="button" data-step="3"><span>4</span>Export</button>
+    </nav>
+    <div class="workspace">
+      <div class="work-area">
+        <section id="volume" class="step-panel" data-panel="0" aria-labelledby="configure-heading">
+          <div class="section-heading"><h2 id="configure-heading" tabindex="-1">Configure substrate</h2><span class="tag">INFWIN MT22 · SDI-12</span></div>
+          <div class="form-block">
+            <label for="system">Growing system</label>
+            <select id="system"><option value="stack">Cubes on a shared slab</option><option value="cube">Cubes only</option><option value="slab">Slab only</option><option value="coco">Coco / peat container</option></select>
+            <div id="block-fields">
+              <label for="block-preset">Block size</label><select id="block-preset"></select>
+              <div class="fields three">
+                <label>Length <span data-unit="length"></span><input id="bl" type="number" data-measure="length" value="15" step="any"></label>
+                <label>Width <span data-unit="length"></span><input id="bw" type="number" data-measure="length" value="15" step="any"></label>
+                <label>Height <span data-unit="length"></span><input id="bh" type="number" data-measure="length" value="14.2" step="any"></label>
               </div>
-            </fieldset>
-            <fieldset id="slab-fields">
-              <legend>Shared slab</legend>
-              <label>Slab size<select id="slab-preset"></select></label>
-              <div class="three">
-                <label
-                  >Length · cm<input
-                    id="sl"
-                    type="number"
-                    min="1"
-                    step="0.1"
-                    value="100" /></label
-                ><label
-                  >Width · cm<input
-                    id="sw"
-                    type="number"
-                    min="1"
-                    step="0.1"
-                    value="15" /></label
-                ><label
-                  >Height · cm<input
-                    id="sh"
-                    type="number"
-                    min="1"
-                    step="0.1"
-                    value="7.5"
-                /></label>
-              </div>
-            </fieldset>
-            <fieldset id="coco-fields" hidden>
-              <legend>Filled container · after hydration and settling</legend>
-              <label
-                >Volume method<select id="pot-method">
-                  <option value="known">Known filled volume</option>
-                  <option value="tapered">Round / tapered container</option>
-                  <option value="box">Rectangular grow bag</option>
-                </select></label
-              >
-              <div id="known-pot">
-                <label
-                  >Common size<select id="pot-preset">
-                    <option value="custom">Custom</option>
-                    <option>1</option>
-                    <option>2</option>
-                    <option>3</option>
-                    <option>5</option>
-                    <option>7.5</option>
-                    <option selected>10</option>
-                    <option>15</option>
-                    <option>20</option>
-                    <option>25</option>
-                    <option>30</option>
-                    <option>40</option>
-                    <option>50</option>
-                  </select></label
-                >
-                <div class="two">
-                  <label
-                    >Filled volume<input
-                      id="pv"
-                      type="number"
-                      value="10"
-                      min="0.1"
-                      step="0.1" /></label
-                  ><label
-                    >Unit<select id="pu">
-                      <option value="L">Litres</option>
-                      <option value="USgal">US gallons</option>
-                      <option value="Impgal">Imperial gallons</option>
-                    </select></label
-                  >
-                </div>
-              </div>
-              <div id="pot-dimensions" hidden>
-                <div class="three">
-                  <label
-                    ><span id="pot-a-label">Top diameter · cm</span
-                    ><input
-                      id="pa"
-                      type="number"
-                      value="25"
-                      min="1"
-                      step="0.1" /></label
-                  ><label
-                    ><span id="pot-b-label">Bottom diameter · cm</span
-                    ><input
-                      id="pb"
-                      type="number"
-                      value="20"
-                      min="1"
-                      step="0.1" /></label
-                  ><label
-                    >Fill height · cm<input
-                      id="ph"
-                      type="number"
-                      value="25"
-                      min="1"
-                      step="0.1"
-                  /></label>
-                </div>
-              </div>
-              <p class="small">
-                Use the filled medium, excluding headspace and any separate
-                drainage layer. A compressed coco brick's shipping volume is not
-                its root-zone volume.
-              </p>
-            </fieldset>
-            <div class="two">
-              <label
-                >Plants per slab / container<input
-                  id="plants"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value="3" /></label
-              ><label
-                >Slabs / containers in zone<input
-                  id="units"
-                  type="number"
-                  min="1"
-                  step="1"
-                  value="1"
-              /></label>
             </div>
-          </div>
-          <aside class="result">
-            <div class="eyebrow">ENTER THIS IF YOUR APP ASKS PER PLANT</div>
-            <div class="big" id="per-plant">—</div>
-            <dl>
-              <dt>One slab + its cubes / one container</dt>
-              <dd id="per-unit">—</dd>
-              <dt>Whole irrigation zone</dt>
-              <dd id="per-zone">—</dd>
-              <dt>Plants in the zone</dt>
-              <dd id="plant-total">—</dd>
-            </dl>
-            <p id="volume-detail"></p>
-            <p class="note">
-              Confirm what your crop-steering app means by “substrate volume”:
-              per plant, per slab or whole zone. These are different numbers.
-            </p>
-            <div id="volume-error" class="error" role="alert"></div>
-          </aside>
-        </div>
-        <details>
-          <summary>Optional shot-volume calculation</summary>
-          <p>
-            This converts an operator-selected shot percentage into volume and
-            time. It does not recommend an irrigation target or predict the VWC
-            rise.
-          </p>
-          <div class="three">
-            <label
-              >Shot · % of volume per plant<input
-                id="shot-pct"
-                type="number"
-                min="0.1"
-                max="100"
-                step="0.1"
-                value="2" /></label
-            ><label
-              >Emitters per plant<input
-                id="emitters"
-                type="number"
-                min="1"
-                step="1"
-                value="2" /></label
-            ><label
-              >Measured flow per emitter · L/h<input
-                id="flow"
-                type="number"
-                min="0.1"
-                step="0.1"
-                value="2"
-            /></label>
-          </div>
-          <p id="shot-result"></p>
-        </details>
-        <p class="small">
-          Grodan block dimensions:
-          <a
-            href="https://www.grodan101.com/siteassets/downloads/grow-guide/chapter-4---precision-irrigation.pdf"
-            >Precision Irrigation guide, pages 5–6</a
-          >. The 1 m entries are geometric examples; check your Prestige label.
-          Nominal six-inch Hugo volume is 3.195 L from 15 × 15 × 14.2 cm.
-        </p>
-      </section>
-
-      <section id="weigh">
-        <div class="eyebrow">02 / CALIBRATION BENCH</div>
-        <h2>Wet reference or actual VWC?</h2>
-        <div class="two cards">
-          <article>
-            <h3>Quick wet reference</h3>
-            <p>
-              Place the sensor, wet the medium uniformly, let free drainage
-              settle and turn <b>Calibration mode</b> on. Wait for
-              <b>Capture ready</b>, then press <b>Save wet reference</b>.
-            </p>
-            <p>
-              The index becomes 100. It is a repeatable instrument reference,
-              not 100% water, field capacity, or water remaining. Turn
-              calibration mode off after capture.
-            </p>
-          </article>
-          <article>
-            <h3>Weighed VWC calibration</h3>
-            <p>
-              Use a spare unplanted sample of the same medium and geometry.
-              Capture two weighed moisture levels, A and B, bracketing the
-              intended range. Check a third independent level C.
-            </p>
-            <p>
-              Headline VWC becomes available only after the check passes and
-              calibration mode is off. Keep the sensor position fixed throughout
-              the measurements.
-            </p>
-          </article>
-        </div>
-        <div class="grid">
-          <div class="panel">
-            <label
-              >Sample / sensor reference<input
-                id="record-label"
-                placeholder="F1 row 2 / sensor serial / substrate batch"
-                maxlength="160" /></label
-            ><label
-              >Calibration sample volume · litres<input
-                id="sample-volume"
-                type="number"
-                min="0.001"
-                step="0.001"
-                value="11.25"
-            /></label>
-            <p class="small">
-              This is the sample on the scale, NOT the allocated litres per
-              plant above. Do not include cubes unless they are part of the
-              weighed, representative calibration specimen.
-            </p>
-            <div class="two">
-              <label
-                >Dry assembly mass · g<input
-                  id="dry"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value="500" /></label
-              ><label
-                >Current assembly mass · g<input
-                  id="wet"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  value="8000"
-              /></label>
+            <div id="slab-fields">
+              <label for="slab-preset">Slab size</label><select id="slab-preset"></select>
+              <div class="fields three">
+                <label>Length <span data-unit="length"></span><input id="sl" type="number" data-measure="length" value="100" step="any"></label>
+                <label>Width <span data-unit="length"></span><input id="sw" type="number" data-measure="length" value="15" step="any"></label>
+                <label>Height <span data-unit="length"></span><input id="sh" type="number" data-measure="length" value="7.5" step="any"></label>
+              </div>
             </div>
-            <details>
-              <summary>Water density</summary>
-              <label
-                >Density · g/mL<input
-                  id="density"
-                  type="number"
-                  min="0.9"
-                  max="1.2"
-                  step="0.001"
-                  value="1"
-              /></label>
-              <p class="small">
-                1 is a practical water approximation. Consistent tare, retained
-                solution salts and spatial gradients can introduce larger
-                errors; record the method.
-              </p>
-            </details>
-            <label
-              >Point label<select id="point">
-                <option>A</option>
-                <option>B</option>
-                <option>C — independent check</option>
-                <option>Additional validation</option>
-              </select></label
-            ><label
-              >Capture RAW average from the device<input
-                id="record-raw"
-                type="number"
-                min="1"
-                max="4095"
-                step="0.1"
-                placeholder="Enter the displayed capture average"
-            /></label>
+            <div id="coco-fields" hidden>
+              <div class="fields two"><label>Medium<select id="medium"><option value="coco">Coco</option><option value="peat">Peat mix</option></select></label><label>Container volume method<select id="pot-method"><option value="known">Known filled volume</option><option value="tapered">Round / tapered pot</option><option value="box">Rectangular bag</option></select></label></div>
+              <div id="known-pot"><div class="fields two"><label>Common filled size<select id="pot-preset"><option value="custom">Custom</option><option value="1">1 L</option><option value="3">3 L</option><option value="5">5 L</option><option value="7.5">7.5 L</option><option value="10" selected>10 L</option><option value="15">15 L</option><option value="20">20 L</option><option value="30">30 L</option><option value="40">40 L</option></select></label><label>Filled volume <span data-unit="volume"></span><input id="pv" type="number" data-measure="volume" value="10" step="any"></label></div></div>
+              <div class="fields three">
+                <label><span id="pot-a-label">Top diameter</span> <span data-unit="length"></span><input id="pa" type="number" data-measure="length" value="30" step="any"></label>
+                <label><span id="pot-b-label">Bottom diameter</span> <span data-unit="length"></span><input id="pb" type="number" data-measure="length" value="20" step="any"></label>
+                <label>Filled height <span data-unit="length"></span><input id="ph" type="number" data-measure="length" value="25" step="any"></label>
+              </div><p class="help" id="pot-help">Measure the hydrated, settled medium. Dimensions also position the probe in the diagram.</p>
+            </div>
+            <div class="fields two"><label><span id="plants-label">Plants per slab</span><input id="plants" type="number" data-measure="count" value="3" step="1" min="1"></label><label><span id="units-label">Slabs in irrigation zone</span><input id="units" type="number" data-measure="count" value="1" step="1" min="1"></label></div>
+            <p class="help" id="size-note">Use actual dimensions from the product label. A nominal six-inch block is not necessarily a perfect cube.</p>
+            <p class="error" id="volume-error" role="alert"></p>
           </div>
-          <aside class="result">
-            <div class="eyebrow">ENTER AS “WEIGHED REFERENCE VWC”</div>
-            <div class="big" id="weighed-vwc">—</div>
-            <p id="water-volume"></p>
-            <p>
-              Then press the matching A, B or independent C button on the
-              sensor's web page.
-            </p>
-            <p class="note">
-              A and B need at least 100 RAW counts and 10 VWC percentage points
-              separation. C must be inside the middle 80% of their RAW interval.
-              Default check tolerance: 3 percentage points, a chosen acceptance
-              threshold, not a sensor accuracy claim.
-            </p>
-            <div id="weigh-error" class="error" role="alert"></div>
-            <button id="save-record">Add to calibration record</button
-            ><button id="download-record" class="secondary">
-              Download CSV
-            </button>
-            <p id="record-status" role="status">
-              Records last until this page is closed.
-            </p>
-          </aside>
-        </div>
-        <details>
-          <summary>Dryback: percentage points versus percent</summary>
-          <div class="two">
-            <label
-              >Peak VWC · %<input
-                id="peak"
-                type="number"
-                value="70"
-                min="0.1"
-                max="100" /></label
-            ><label
-              >Current VWC · %<input
-                id="current"
-                type="number"
-                value="60"
-                min="0"
-                max="100"
-            /></label>
+          <details class="form-block"><summary>Shot volume &amp; runtime</summary><p class="help">Arithmetic from your chosen shot size and measured emitter flow.</p><div class="fields three"><label>Shot size %<input id="shot-pct" type="number" data-measure="count" value="2" min="0.01" max="100" step="any"></label><label>Emitters per plant<input id="emitters" type="number" data-measure="count" value="2" min="1" step="1"></label><label>Flow per emitter <span data-unit="flow"></span><input id="flow" type="number" data-measure="flow" value="2" step="any"></label></div><output id="shot-result" class="calculation"></output><p class="help">Confirm delivery with a catch test. This is delivered water, not the resulting VWC increase.</p></details>
+          <details class="form-block" id="hardware"><summary>Controller &amp; YAML parameters</summary><p class="help">For a new configuration or an upgrade to the v3 calibration controls.</p>
+            <div class="fields two"><label>Controller board<select id="board"></select></label><label>SDI-12 data pin<select id="pin"></select></label></div>
+            <div class="fields two"><label>Device name<input id="device-name" value="tdr-sensor" maxlength="30" autocomplete="off"></label><label>Display name<input id="friendly-name" value="TDR Sensor" maxlength="80" autocomplete="off"></label></div>
+            <div class="fields two"><label>Probe address<input id="address" value="0" maxlength="1" autocomplete="off"></label><label>Sample interval<select id="interval"><option value="10">10 seconds</option><option value="30" selected>30 seconds</option><option value="60">60 seconds</option><option value="120">120 seconds</option></select></label></div>
+            <p class="help">Use the pin actually wired to the data line. Generated YAML uses references to your local secrets file.</p><p class="error" id="config-error" role="alert"></p>
+          </details>
+        </section>
+        <section id="place" class="step-panel" data-panel="1" aria-labelledby="place-heading" hidden>
+          <div class="section-heading"><h2 id="place-heading" tabindex="-1">Position the sensor</h2><span class="tag" id="position-medium">Slab</span></div>
+          <p id="placement-intro"></p>
+          <div class="diagram-grid" id="placement-diagram"></div>
+          <p class="diagram-caption">Schematic. Rod spacing is illustrative; use your real probe to transfer pin positions.</p>
+          <div class="form-block">
+            <div class="fields two"><label>Rod centreline above substrate base <span data-unit="height"></span><input id="position" type="number" data-measure="height" value="37.5" step="any"></label><label>Sensor / location reference<input id="sensor-reference" placeholder="Sensor serial · row / pot" maxlength="160" autocomplete="off"></label></div>
+            <button type="button" class="text-button" id="midpoint">Use midpoint</button><p class="help">Midpoint is an initial comparison position. Check its readings against independent measurements before standardising it.</p>
+            <div id="placement-notes" class="placement-notes"></div>
+            <p class="error" id="placement-error" role="alert"></p>
+            <label class="check"><input id="placed" type="checkbox"><span>The probe is installed in the recorded position with full contact around all rods.</span></label>
           </div>
-          <p id="dryback-result"></p>
-          <p>
-            A slab reading represents a local sensing region. Multiplying it by
-            the entire slab-plus-cubes volume assumes uniform moisture and can
-            give a false whole-root-zone water balance.
-          </p>
-        </details>
-      </section>
-
-      <section id="place">
-        <div class="eyebrow">03 / POSITION & REPEAT</div>
-        <h2>MT22 placement</h2>
-        <p>
-          For roots established in a slab, use the slab as the primary
-          measurement. Keep a cube probe only when you want a separate
-          upper-block reading. Starting flower week alone cannot prove rooting
-          into the slab.
-        </p>
-        <img
-          class="diagram"
-          src="../../docs/img/mt22-placement.svg"
-          alt="MT22 side insertion into a slab beside the middle of three blocks, with the long body level and all three 53 mm rods at one height."
-        />
-        <p>
-          <a href="../../docs/PLACEMENT.md"
-            >Placement for cubes, slabs and coco ↗</a
-          >
-          ·
-          <a href="../../docs/print/MT22-placement-template-A4-actual-size.pdf"
-            >Download 75 / 100 mm slab templates (PDF) ↗</a
-          >
-        </p>
-        <div class="panel">
-          <h3>Custom actual-size placement sheet</h3>
-          <p>
-            Enter the actual substrate height and your chosen rod height from
-            the base. The suggested midpoint is a repeatable starting position,
-            not an MT22 placement specification validated for every medium.
-          </p>
-          <div class="two">
-            <label
-              >Substrate height · mm<input
-                id="print-height"
-                type="number"
-                min="26"
-                max="160"
-                step="0.5"
-                value="75" /></label
-            ><label
-              >Rod centreline above base · mm<input
-                id="print-center"
-                type="number"
-                min="13"
-                step="0.5"
-                value="37.5"
-            /></label>
+          <details class="form-block"><summary>Print an actual-size placement template</summary><p class="help" id="template-description"></p><div class="inline-controls"><label>Paper size<select id="paper"><option value="A4">A4</option><option value="Letter">US Letter</option></select></label><button type="button" id="print-button" class="secondary">Print template</button><button type="button" id="download-template" class="secondary">Download SVG</button></div><p class="help">Print at Actual size / 100%. Measure both check bars before using it.</p><p class="error" id="print-error" role="alert"></p></details>
+          <div class="resource-links"><button type="button" class="text-button" id="download-diagram">Download this diagram</button><a href="../../docs/PLACEMENT.md">Placement guide</a><a href="../../docs/print/MT22-placement-template-A4-actual-size.pdf">Standard slab PDF (A4, mm)</a></div>
+        </section>
+        <section id="weigh" class="step-panel" data-panel="2" aria-labelledby="calibration-heading" hidden>
+          <div class="section-heading"><h2 id="calibration-heading" tabindex="-1">Calibrate this setup</h2><span class="tag">Manual readings</span></div>
+          <label for="cal-method">Calibration method</label><select id="cal-method"><option value="wet">Wet reference — current planted substrate</option><option value="weighed">Weighed VWC — spare sample, A / B / C</option><option value="none">Configure now, calibrate later</option></select>
+          <div class="notice" id="prepare-note">Set the sensor's Substrate Profile before recording. Changing that profile clears its saved references.</div>
+          <div id="cal-instructions" class="instruction-list"></div>
+          <div class="form-block" id="wet-cal">
+            <h3>Record the settled wet reference</h3><p>Wet uniformly through the normal delivery path, then let free drainage settle. On a planted substrate, use a normal wet irrigation plateau.</p>
+            <div class="fields two"><label>Capture RAW average<input id="wet-raw" type="number" data-measure="count" min="0" max="4095" step="any" placeholder="From the sensor"></label><label>Solution temperature (optional) <span data-unit="temperature"></span><input id="solution-temp" type="number" data-measure="temperature" step="any" placeholder="Record if known"></label></div>
+            <button type="button" id="record-wet">Record wet reference</button><output id="wet-status" class="record-status" aria-live="polite"></output><p class="help">A wet reference sets an index of 100. It does not establish 100% VWC or a calibrated dryback percentage.</p>
           </div>
-          <p class="small">
-            This A4 sheet supports heights 26–160 mm. For a taller container use
-            a measured base datum and ruler. Pin pitch is not dimensioned by
-            INFWIN: transfer the real probe pins onto the centreline, never
-            guessed hole positions.
-          </p>
-          <button id="print-button">Print placement sheet</button
-          ><span id="print-error" class="error" role="alert"></span>
-        </div>
-      </section>
-      <footer>
-        Monitoring and measurement tools. No pump controls, network calls,
-        tracking or saved credentials.<br /><a href="../../docs/SOURCES.md"
-          >Sources & evidence limits</a
-        >
-        · <a href="../../docs/MIGRATION-v3.md">Upgrading from v2</a>
-      </footer>
-    </main>
-    <div id="print-sheet" aria-hidden="true"></div>
-  </body>
+          <div id="weighed-cal" hidden>
+            <div class="form-block"><h3>Define the sample on the scale</h3><p>Use a spare, unplanted sample of the same medium, packing and geometry. Keep its sensor position fixed between measurements.</p>
+              <div class="fields three"><label>Sample volume <span data-unit="volume"></span><input id="sample-volume" type="number" data-measure="volume" value="11.25" step="any"></label><label>Dry assembly mass <span data-unit="mass"></span><input id="dry" type="number" data-measure="mass" step="any" placeholder="Measured tare"></label><label>Water density <span data-unit="density"></span><input id="density" type="number" data-measure="density" step="any" value="1"></label></div>
+              <button type="button" class="text-button" id="use-sample-volume">Use the monitored substrate volume</button><p class="help" id="sample-note"></p><p class="help">Include the same container, sleeve, support and probe in every weighing. Air-dry medium can still contain water; use a defensible dry mass. <span id="density-default"></span></p>
+            </div>
+            <div class="cal-points">
+              <div class="point-row" id="point-A"><div class="point-title"><span>A</span><h3>First moisture level</h3><span id="a-badge" class="record-badge">Not recorded</span></div><div class="fields three"><label>Current mass <span data-unit="mass"></span><input id="mass-a" type="number" data-measure="mass" step="any"></label><label>RAW average<input id="raw-a" type="number" data-measure="count" step="any" min="0" max="4095"></label><div class="point-result"><span>Reference VWC</span><output id="vwc-a">—</output></div></div><button type="button" id="record-a" class="secondary">Record A</button><p class="help" id="action-a"></p></div>
+              <div class="point-row" id="point-B"><div class="point-title"><span>B</span><h3>Second moisture level</h3><span id="b-badge" class="record-badge">Not recorded</span></div><div class="fields three"><label>Current mass <span data-unit="mass"></span><input id="mass-b" type="number" data-measure="mass" step="any"></label><label>RAW average<input id="raw-b" type="number" data-measure="count" step="any" min="0" max="4095"></label><div class="point-result"><span>Reference VWC</span><output id="vwc-b">—</output></div></div><button type="button" id="record-b" class="secondary">Record B</button><p class="help" id="action-b"></p></div>
+              <div class="point-row" id="point-C"><div class="point-title"><span>C</span><h3>Independent check</h3><span id="c-badge" class="record-badge">Not recorded</span></div><div class="fields three"><label>Current mass <span data-unit="mass"></span><input id="mass-c" type="number" data-measure="mass" step="any"></label><label>RAW average<input id="raw-c" type="number" data-measure="count" step="any" min="0" max="4095"></label><div class="point-result"><span>Reference VWC</span><output id="vwc-c">—</output></div></div><button type="button" id="record-c" class="secondary">Record C &amp; check</button><p class="help" id="action-c"></p></div>
+            </div>
+            <output class="calibration-check" id="fit-result" aria-live="polite">Record A and B, then check a separate intermediate moisture level C.</output>
+            <details class="form-block"><summary>Why three points?</summary><p>A and B establish an offset and gain around the probe's generic soilless response. They must differ by at least 100 RAW counts and 10 VWC percentage points. C must lie strictly inside the middle 80% of their RAW interval. Use the same physical sample; don't calculate C from the fitted curve.</p><p>The sensor receives VWC rounded to its 0.1% input step. The check below uses that same rounding.</p></details>
+          </div>
+          <details class="form-block" id="cal-options"><summary>Capture &amp; check limits</summary><div class="fields two"><label>Maximum RAW spread (counts)<input id="spread" type="number" data-measure="count" value="10" min="1" max="100" step="1"></label><label>Third-point tolerance (pp)<input id="tolerance" type="number" data-measure="count" value="3" min="0.5" max="10" step="0.1"></label></div><p class="help">Keep the defaults unless you have a documented reason. Increasing tolerance to make a failed check pass does not improve the calibration.</p></details>
+          <p class="error" id="cal-error" role="alert"></p>
+        </section>
+        <section id="export" class="step-panel" data-panel="3" aria-labelledby="export-heading" hidden>
+          <div class="section-heading"><h2 id="export-heading" tabindex="-1">Your sensor setup</h2><span class="tag" id="export-tag">Setup only</span></div>
+          <p id="export-intro"></p>
+          <div class="export-tabs" role="tablist" aria-label="Export format"><button type="button" role="tab" aria-selected="true" aria-controls="settings-output" id="settings-tab">Sensor settings</button><button type="button" role="tab" aria-selected="false" aria-controls="yaml-output" id="yaml-tab">ESPHome YAML</button></div>
+          <div id="settings-output" role="tabpanel" aria-labelledby="settings-tab">
+            <div class="settings-table-wrap"><table class="settings-table"><thead><tr><th>Parameter</th><th>Set / verify</th></tr></thead><tbody id="settings-rows"></tbody></table></div>
+            <div class="form-block"><h3>Apply on the sensor</h3><ol id="apply-instructions"></ol></div>
+            <div class="button-row"><button type="button" id="download-report">Download setup report</button><button type="button" id="download-record" class="secondary">Download calibration CSV</button></div>
+          </div>
+          <div id="yaml-output" role="tabpanel" aria-labelledby="yaml-tab" hidden>
+            <p class="help" id="yaml-note"></p><pre class="yaml-box"><code id="yaml-preview"></code></pre>
+            <div class="button-row"><button type="button" id="download-yaml">Download device YAML</button><button type="button" id="copy-yaml" class="secondary">Copy YAML</button><button type="button" id="download-secrets" class="secondary">Secrets example</button></div>
+            <ol class="install-steps"><li>Fill in your own <code>secrets.yaml</code> locally. Generate a new API encryption key in ESPHome.</li><li>Validate and build with ESPHome 2026.8.2, then install the generated device YAML.</li><li>Open the device's web page. Press <strong>Apply wizard setup</strong>. This selects the medium and starts a fresh capture window.</li><li id="import-instruction">Complete calibration on the device using the calibration guide.</li><li>Check saved values, turn <strong>Calibration mode</strong> off and wait at least ten seconds before disconnecting power.</li></ol>
+          </div>
+          <p class="error" id="export-error" role="alert"></p><p class="help">This website creates files and instructions. It does not connect to your sensor or flash firmware.</p>
+        </section>
+        <div class="wizard-footer"><button type="button" id="previous" class="secondary">Back</button><button type="button" id="setup-only" class="text-button">Export setup only</button><button type="button" id="next">Continue to sensor position</button></div>
+        <p class="error navigation-error" id="navigation-error" role="alert"></p>
+      </div>
+      <aside class="summary-panel" aria-label="Calculated setup">
+        <div class="summary-heading"><h2>Root zone</h2><span id="summary-system">Cubes + slab</span></div>
+        <div class="primary-result"><span>Per plant</span><output id="per-plant" aria-live="polite">—</output><p>Use when your steering app asks for substrate volume per plant.</p></div>
+        <dl class="summary-values"><div><dt id="per-unit-label">Slab + all cubes</dt><dd id="per-unit">—</dd></div><div><dt>Whole irrigation zone</dt><dd id="per-zone">—</dd></div><div><dt>Total plants</dt><dd id="plant-total">—</dd></div></dl>
+        <p id="volume-detail" class="formula"></p>
+        <div class="summary-section"><span class="summary-label">Primary measurement</span><strong id="monitor-location">Slab</strong><p id="monitor-note">After roots have established into the slab.</p></div>
+        <div class="summary-section"><span class="summary-label">Calibration record</span><strong id="cal-summary">No reference recorded</strong><p id="cal-summary-note">Choose a method in step 3.</p></div>
+        <details class="dryback-tool"><summary>Dryback calculator</summary><div class="fields two"><label>Peak VWC %<input id="peak" type="number" data-measure="count" value="70" step="any"></label><label>Current VWC %<input id="current" type="number" data-measure="count" value="60" step="any"></label></div><output id="dryback-result"></output><p class="help">Use checked VWC readings, not the wet-reference index.</p></details>
+      </aside>
+    </div>
+    <footer class="app-footer"><span>Calculations and saved setup stay in this browser.</span><div><a href="../../docs/SOURCES.md">Sources &amp; limitations</a><a href="../../docs/MIGRATION-v3.md">Upgrade guide</a><button type="button" id="reset" class="text-button">Reset setup</button></div></footer>
+  </main>
+  <div id="print-sheet"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
 </html>

@@ -23,11 +23,15 @@ The factory does not publish an MT22/Prestige-specific minimum distance from eve
 
 ## Cubes alone
 
+![MT22 horizontal placement in a standalone cube](img/mt22-cube-placement.svg)
+
 Use a repeatable side insertion into a sufficiently large block, with the rod row level. A midpoint height is an initial mapping position, subject to the same boundary and representativeness checks. A 150 mm-wide Hugo can accommodate the 88 mm contact face geometrically; that is not proof of whole-block accuracy.
 
 **Small propagation blocks need a different sensor or validation arrangement.** A 75 mm-wide cube cannot accommodate the MT22's 88 mm-wide face in this orientation. Do not cut a larger hole or leave an outer pin in air. Some 100 mm blocks also leave very little lateral clearance; check the sensing footprint rather than relying solely on rod length. A physically smaller substrate-specific probe may be a better fit.
 
 ## Coco / peat containers
+
+![MT22 placement within a coco container](img/mt22-coco-placement.svg)
 
 Measure at a recorded depth in the actual packed, rooted medium, away from the emitter stream, stem, drainage layer and container boundary. Map more than one depth or compare representative pots before choosing a standard position. The middle of the filled height is a possible initial comparison point, not a universal coco rule.
 
@@ -37,9 +41,9 @@ Different pot heights and media mixes need their own calibration and placement r
 
 ## Print and use the template
 
-- Print A4, **Actual size / 100%**, with Fit, Shrink and browser headers/footers disabled.
-- Measure both perpendicular 100 mm scale bars. Aim for no more than 0.5 mm discrepancy; reject a scaled print.
-- Select the correct slab-height page. Align the base datum with the bottom face of the rockwool.
+- The fixed slab PDF uses A4. The calculator generates A4 or US Letter sheets for your selected dimensions and units. Print **Actual size / 100%**, with Fit, Shrink and browser headers/footers disabled.
+- Measure both perpendicular check bars: 100 mm in metric or 4 in in imperial. Aim for no more than 0.5 mm (0.02 in) discrepancy; reject a scaled print.
+- Select the correct slab-height page. Align the base datum with the bottom of the medium. For a custom sheet marked Tall container, first mark the chosen height with a ruler and align its centreline; that sheet has no base datum.
 - Transfer your actual sensor's three pin positions onto the printed centreline using scrap backing. Remove the paper before final insertion; do not drill oversized holes in the substrate.
 - The printed 88 × 26 mm outline locates the housing. It does not calibrate VWC or prove the chosen location is representative.
 

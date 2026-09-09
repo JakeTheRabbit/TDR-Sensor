@@ -6,7 +6,8 @@ Use **ESPHome 2026.8.2**. Source checks, compiled host tests and firmware builds
 
 ```sh
 pip install esphome==2026.8.2 PyYAML==6.0.2
-node --test tests/calculator.test.js
+node --test tests/calculator.test.js tests/wizard.test.js
+python tests/test_generated_configs.py --compile
 python tests/test_firmware.py
 python tests/test_repository.py
 python tests/check_configs.py
@@ -25,7 +26,7 @@ The setup tests run the same JavaScript used in the page. They cover real Hugo d
 
 Open `tools/setup/index.html` from an extracted download and verify it without a network connection. Check cube-only, cube-on-slab, slab-only and coco calculations; invalid input must clear the previous answer. Add a weighed record and download the CSV. Check the layout at desktop and phone widths.
 
-The supplied two-page PDF has A4 pages and a dimensioned 88 × 26 mm face. The custom print sheet uses an A4 SVG in physical millimetres, including perpendicular 100 mm scale bars. PDF geometry checks cannot compensate for a printer driver scaling the page: always measure both bars on the physical print.
+The supplied two-page PDF has A4 pages and a dimensioned 88 × 26 mm face. The custom template supports A4 and US Letter, with physical SVG geometry in millimetres regardless of display units. Its perpendicular check bars are 100 mm in metric mode or 4 inches in imperial mode. Tall containers use a ruler-marked centreline instead of pretending the entire height fits on one page. PDF geometry checks cannot compensate for a printer driver scaling the page: always measure both bars on the physical print.
 
 ## What remains a field check
 
@@ -45,3 +46,24 @@ There is no automatic deployment or flashing step in these checks. A successful 
 - Browser interaction checks passed for all four systems, preset/custom edits, gallons, tapered pots, invalid inputs, weighed calculations, CSV download, desktop/phone layout and a custom A4 print sheet.
 - The custom printed PDF had one A4 page; its contact-face rectangle measured 87.999 × 26.000 mm in PDF coordinates. Physical printer scaling still requires the two ruler checks.
 - No firmware was installed on a physical node and no Home Assistant or irrigation settings were changed. Consult the PR checks for the final five-board CI build result.
+
+## Calculator and calibration wizard
+
+The wizard checks substrate geometry, unit conversion, manual wet-reference records,
+and weighed A/B/C records before generating a configuration. It uses the same
+soilless response fit as the firmware, including 0.1% sensor-input rounding and
+independent C bounds. Changing sample geometry, placement or tare invalidates
+recorded references; changing display units preserves their canonical values.
+
+`test_generated_configs.py` exercises 15 real exports: five boards, each with no
+calibration, a wet reference, or a checked A/B/C import. It validates them against
+ESPHome and their pinned remote packages using temporary dummy secrets. `--compile`
+also builds the Atom Lite weighed-reference export, including the generated C++
+import action. The Pages deployment waits for this check and the site build.
+
+Browser verification covers unit round trips, US and UK container presets, sample
+volume updates, undersized cubes, wet and weighed workflows, rejected C points,
+YAML/report/CSV downloads, reload and project import, reference invalidation,
+responsive layouts and a one-page Letter template (612 × 792 PDF points).
+The browser checks entered data. It cannot verify the physical sensor's capture
+window, identity, contact or live readiness.

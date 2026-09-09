@@ -23,3 +23,16 @@ The `Publish setup site` workflow builds and checks changes in pull requests.
 Relevant pushes to `main` also deploy the checked artifact to the `github-pages`
 environment. GitHub Pages must use **GitHub Actions** as its publishing source.
 The workflow can also be run manually from the repository's Actions tab.
+
+## Calculator source
+
+- `calculator.js`: substrate, weighing, shot and dryback arithmetic.
+- `units.js`: canonical-to-display conversion for metric, US and UK units.
+- `wizard.js`: calibration checks and board-specific YAML generation.
+- `diagrams.js`: unit-aware cube, slab and coco drawings and physical print sheets.
+- `app.js`: the four-step interface and browser-local project storage.
+
+Generated YAML references an immutable v3 package revision. Update that revision
+only after checking the generator against the package's actual entity IDs and
+calibration contract. The Pages workflow validates 15 export variants and compiles
+one with the reference-import action before publishing.

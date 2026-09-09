@@ -28,7 +28,8 @@ GUIDE_ORDER = (
 
 def destinations() -> dict[Path, str]:
     files = {SETUP / name: name for name in (
-        "index.html", "style.css", "ui.js", "calculator.js", "substrates.js", "favicon.svg",
+        "index.html", "style.css", "app.js", "calculator.js", "substrates.js", "favicon.svg",
+        "units.js", "wizard.js", "diagrams.js",
     )}
     files[ROOT / "tools/site/guides.css"] = "guides.css"
     for path in (ROOT / "docs").glob("*.md"):
@@ -66,7 +67,7 @@ def guide_page(title: str, content: str, source: str | None = None) -> str:
 <link rel="icon" href="../favicon.svg">
 <link rel="stylesheet" href="../style.css"><link rel="stylesheet" href="../guides.css">
 </head><body class="guide"><header>
-<div class="brand">TDR SENSOR <span>FIELD GUIDES / 03</span></div>
+<div class="brand">TDR Sensor <span>Field guides</span></div>
 <h1>{html.escape(title)}</h1>
 <nav aria-label="Main navigation"><a href="../index.html">Setup calculator</a>
 <a href="index.html">All guides</a><a href="{REPO_URL}">GitHub repository ↗</a></nav>
@@ -130,7 +131,7 @@ def build(output: Path) -> None:
             target.write_text(guide_page(title, content, source.relative_to(ROOT).as_posix()), encoding="utf-8")
         elif source == SETUP / "index.html":
             content = rewrite_links(source.read_text(encoding="utf-8"), source, destination, files)
-            content = content.replace("</nav>", '<a href="guides/index.html">All guides ↗</a></nav>', 1)
+            content = content.replace("<!-- ONLINE_GUIDES -->", '<a href="guides/index.html">All guides</a>')
             target.write_text(content, encoding="utf-8")
         else:
             shutil.copyfile(source, target)
