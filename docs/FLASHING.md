@@ -1,3 +1,5 @@
+> Check the release version before downloading: older published binaries may contain v2. A v3 source branch or successful CI artifact is not itself a published v3 release. Factory hostnames include a MAC suffix; check DHCP/discovery for the actual address.
+
 # Flashing the firmware
 
 Two ways in. Pick the one that matches what you want.
@@ -83,7 +85,7 @@ Once a device is running this firmware and is on your network, you have a few op
 
 **Over the air from ESPHome.** If you build your own config, `esphome run` pushes updates over WiFi. No cable. This is the nicest way to live, and it is why the [remote package config](CONFIG.md) is worth setting up.
 
-**From the browser again.** Download the new `.factory.bin` from Releases and repeat the steps above over USB. Your calibration settings are stored separately from the firmware and survive a normal update.
+**From the browser again.** Download the new `.factory.bin` from Releases and repeat the steps above over USB. Matching saved settings can survive a normal update, but v3 deliberately requires new checked calibration references. Read [MIGRATION-v3.md](MIGRATION-v3.md) before upgrading; do not assume a factory erase preserves settings.
 
 **Home Assistant adoption.** If you run the ESPHome Dashboard, either the Home Assistant add-on or standalone, a device flashed with the pre-built firmware shows up as discovered and offers to be adopted. Adopting pulls the config from this repo and lets you manage and update it from the dashboard. This only works in the full ESPHome Dashboard, not on web.esphome.io, because adopting means compiling a config. See [HOMEASSISTANT.md](HOMEASSISTANT.md).
 

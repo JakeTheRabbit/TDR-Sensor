@@ -16,7 +16,7 @@ substitutions:
   board: esp32dev
   sdi12_data_pin: GPIO16
   sdi12_address: "0"
-  sample_interval: 10s
+  sample_interval: 30s
   timezone: Pacific/Auckland
 
 packages:

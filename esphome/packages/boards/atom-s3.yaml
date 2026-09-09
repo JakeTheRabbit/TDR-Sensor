@@ -1,7 +1,7 @@
 # M5Stack AtomS3 Lite board package
 # Onboard SK6812 LED on GPIO35, button on GPIO41, Grove port G1/G2.
 # Remember to set sdi12_data_pin: GPIO1 in your device file.
-# LED colours: blue = irrigating, green = drying, orange = target hit.
+# LED colours: blue = wetting detected, green = drying, orange = target hit.
 
 esp32:
   board: m5stack-atoms3
@@ -58,7 +58,9 @@ interval:
             return;
           }
           float r = 0.0f, g = 0.0f, b = 0.0f;
-          if (id(g_phase) == 1) {
+          if (!id(vwc_ready).state) {
+            r = 0.65f; b = 0.65f;  // Violet: uncalibrated, stale or calibrating.
+          } else if (id(g_phase) == 1) {
             b = 1.0f;
           } else {
             float p = id(g_peak);

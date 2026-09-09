@@ -88,12 +88,12 @@ display:
       } else {
         it.printf(120, 92, id(font_big), c_white, TextAlign::CENTER, "%.1f%%", v);
       }
-      float ec = id(pwec).state;
+      float ec = id(bulk_ec_25).state;
       if (!isnan(ec))
-        it.printf(120, 140, id(font_med), c_amber, TextAlign::CENTER, "EC %.2f", ec);
+        it.printf(120, 140, id(font_med), c_amber, TextAlign::CENTER, "bEC %.2f", ec);
       float db = id(dryback_pts).state;
       if (!isnan(db))
-        it.printf(120, 168, id(font_med), c_white, TextAlign::CENTER, "DB %.1f%%", db);
+        it.printf(120, 168, id(font_med), c_white, TextAlign::CENTER, "DB %.1fpp", db);
       it.printf(120, 200, id(font_small), c_green, TextAlign::CENTER, "%s",
                 id(steering_mode).state.c_str());
 

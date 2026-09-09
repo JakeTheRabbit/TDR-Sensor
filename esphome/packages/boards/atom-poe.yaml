@@ -2,7 +2,7 @@
 # Wired ethernet with PoE power, no WiFi config needed. The Grove
 # port on the PoE base passes through G26/G32 so the probe wiring is
 # the same as a bare Atom Lite.
-# LED colours: blue = irrigating, green = drying, orange = target hit.
+# LED colours: blue = wetting detected, green = drying, orange = target hit.
 
 esp32:
   board: m5stack-atom
@@ -71,7 +71,9 @@ interval:
             return;
           }
           float r = 0.0f, g = 0.0f, b = 0.0f;
-          if (id(g_phase) == 1) {
+          if (!id(vwc_ready).state) {
+            r = 0.65f; b = 0.65f;  // Violet: uncalibrated, stale or calibrating.
+          } else if (id(g_phase) == 1) {
             b = 1.0f;
           } else {
             float p = id(g_peak);

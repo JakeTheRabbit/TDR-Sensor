@@ -1,117 +1,80 @@
-# Calibration
+# Calibrate without pretending saturation is 100% VWC
 
-The sensor gives useful numbers out of the box, but a probe reading is only as good as its calibration in your exact substrate and feed. This guide walks through it step by step. Do the VWC calibration first, then field capacity, then EC. You do all of it from the web page or Home Assistant, nothing gets reflashed.
+There are two different tasks: saving a repeatable wet reference, and estimating actual volumetric water content from independent weights. Version 3 keeps them separate. All captures are available on the node's web page and in Home Assistant; calibration does not require reflashing.
 
-If you have never done this before, read the whole page once before you start. None of it is hard, but the order matters.
+The MT22 reports raw dielectric response, temperature and bulk EC. Its manufacturer's generic soilless equation is not a validated calibration for every rockwool slab or coco mix. A substrate selection records the setup; it does not install a universal water-content target. See [sources and limits](SOURCES.md).
 
-This page is the procedure. For why any of it works, and what the numbers can and cannot tell you, read [Root zone state estimation with the TEROS-12](https://jaketherabbit.github.io/cannabis-white-papers/root-zone-teros12.html). It goes through the measurement physics, the accuracy you can actually expect, and why a single probe needs a second witness before you act on it.
+## Quick start: save a wet reference in the current slab
 
-## What you are calibrating and why
+1. Put the probe in its final, recorded location. For established cubes-on-slabs, use the slab for the main reading. Follow [PLACEMENT.md](PLACEMENT.md).
+2. Turn **Calibration mode** on. This pauses headline VWC and dryback tracking. It starts a fresh ten-reading capture window.
+3. Wet the substrate uniformly using the normal delivery path, then allow free drainage to settle. Record solution EC, temperature, drain configuration and elapsed time after watering. On an established crop, use a normal wet irrigation plateau; do not block drains or repeatedly flood the crop to force a number.
+4. Wait for **Capture ready**. At default settings, ten fresh replies take about five minutes. The RAW range across the window must be at most 10 counts. If it does not settle, investigate distribution, movement, contact or continuing drainage. Do not simply increase the spread limit until an unstable reading passes.
+5. Press **Save wet reference**. Check **Saved Wet RAW** and **Last calibration action**. Keep power on for at least ten seconds after saving so the setting is written to flash.
+6. Turn Calibration mode off. Watch **Wet reference index** across subsequent irrigation and drainage cycles, alongside delivered volume and plant condition.
 
-- VWC (volumetric water content) is the percent of the substrate volume that is water. The raw probe reading is a capacitance number, and the firmware converts it with a polynomial. That polynomial is close for rockwool and coco, but every probe and every block is slightly different, so you correct it with a two point calibration.
-- Field capacity is the VWC right after the block has been saturated and allowed to drain. It is your reference line for dryback. Everything in crop steering is measured against it.
-- Pore EC is the salt concentration in the water the roots actually drink. The firmware derives it from bulk EC and water content. You calibrate the bulk EC against a known solution so the derived pore EC is trustworthy.
+At capture the index is about 100: `100 × generic_response(current RAW) / generic_response(saved wet RAW)`. It is an instrument-relative index, **not 100% VWC, not percentage of water remaining and not a calibrated dryback percentage**. Readings above 100 and a negative drop are allowed; these help expose a wetter condition or a changed setup. A low/invalid generic response can make the index unavailable; do not fix that by forcing saturation to 100.
 
-## Before you start
+One wet point cannot establish the curve's slope or shape. It also cannot establish an independent true wet VWC without a reference measurement. There is no fixed cube-to-slab offset.
 
-Set your substrate first. On the web page, under Calibration, set Substrate Profile to Rockwool, Coco, Peat, or Mineral Soil. This loads sensible starting points for field capacity, the pore EC blend, and the Hilhorst offset. Do this before anything else, because changing it later reloads those defaults and undoes your tuning.
+## Actual VWC: weighed A and B, then independent C
 
-You will need:
+Use a spare, unplanted sample matching the production medium, density, geometry, support, drainage and sensor placement. Do not dry a flowering plant to create a calibration endpoint. Calibrate each probe and repeat the check when the substrate or placement changes.
 
-- A kitchen scale that reads grams
-- An oven or a known dry block
-- A bucket
-- Your normal feed solution
-- A known EC calibration solution (a 1.413 dS/m or a 2.76 dS/m standard is common and cheap)
-- A handheld EC pen if you have one, for a sanity check
+### 1. Define the sample and tare
 
-## VWC two point calibration
+- Measure substrate volume, using actual metric dimensions or actual filled container volume. Use [the setup desk](../tools/setup/index.html#weigh) for the arithmetic.
+- Determine a defensible dry substrate mass with a suitable constant-mass laboratory procedure for that medium. Air-dry material can retain water. Keep sensors, electronics and packaging out of drying equipment; follow the material's handling instructions. If true dry mass cannot be established, retain a wet reference and avoid claiming an absolute VWC calibration.
+- Record the total dry assembly mass: dry medium plus every constant item on the scale. The sleeve, container, support and sensor mass must be treated consistently at every weighing. Remove free water from trays. Account for cable tension or keep cables supported consistently.
+- Living roots, changing plant mass, water outside the medium and retained fertiliser salts can bias a simple mass difference. A spare sample with a documented procedure is easier to audit than a planted slab.
 
-The idea is simple. You show the probe what bone dry looks like, you show it what fully saturated looks like, and it works out the straight line between them. The dry point is true zero water. The saturated point is a value you measure.
+The estimate is:
 
-### Step 1: capture the dry point
+**VWC (%) = (current assembly mass − dry assembly mass) ÷ water density ÷ sample volume in mL × 100**
 
-You want the probe reading a completely dry sample of your substrate.
+Using water density 1 g/mL is a practical approximation; the calculator allows another measured density. Example: 500 g dry assembly, 8,000 g current assembly and 11.25 L of substrate gives about **66.67% VWC**. This volume is the sample being weighed, not each plant's allocation of a shared slab.
 
-For rockwool: take a piece of the same rockwool, dry it fully. An hour in an oven at 105C, or a few days somewhere warm and dry. It has to be properly dry, not just surface dry.
+### 2. Capture two measured levels
 
-For coco: same thing, oven dry a scoop of your coco until it stops losing weight.
+1. Turn **Calibration mode** on. Choose the substrate profile before making captures. Changing it clears references; Rockwool/Coco/Peat use the generic soilless base curve and Mineral soil uses the separate manual equation.
+2. Prepare a uniformly wet sample, allow free drainage and redistribution to stabilise, and weigh it. Keep the probe at the recorded depth. An apparently stable reading does not alone prove uniform water distribution.
+3. Enter the calculated percentage as **Weighed reference VWC**, wait for Capture ready, then press **Capture weighed point B**. Check the saved RAW and VWC. The input resets to zero to prevent accidentally reusing a previous weight.
+4. Let the same sample reach a lower moisture level without moving the probe, then repeat the weighing and capture it as **point A**. A and B can be entered in either order.
+5. The two points must span at least **100 RAW counts** and **10 VWC percentage points**, and RAW must increase with VWC. Choose points that bracket the intended operating range. These are minimum project checks, not a guarantee that any such pair is scientifically sufficient. Zero and 100% entries are rejected; fully dry/fully saturated endpoints are not needed for this operating-range calibration.
 
-Push the probe fully into the dry sample. Let the reading settle for a minute. Then press Capture Dry Point.
+The firmware applies an affine correction to the manufacturer's generic curve: `V = VA + (G(R) − G(RA)) × (VB − VA) / (G(RB) − G(RA))`. It does not extrapolate outside the RAW interval. **VWC two-point estimate** is diagnostic until an independent check passes.
 
-### Step 2: work out your saturated reference
+### 3. Check a third independently weighed level
 
-This is the real VWC of a saturated, drained block, and you get it with a scale.
+1. Prepare a third moisture condition between A and B, with RAW within the middle 80% of their interval. Rewetting followed by equilibration is possible; record it because wetting/drying history may matter.
+2. Weigh it independently and calculate VWC. Do not use the predicted VWC as the reference value.
+3. Enter the measured percentage, wait for Capture ready and press **Check independent weighed point C**.
+4. Inspect **Third-point error**: fitted VWC minus measured VWC, in percentage points. Default tolerance is **3 points**, a chosen acceptance criterion rather than an accuracy specification. A failed or out-of-range check leaves headline VWC unavailable. Investigate tare, volume, gradients, poor contact, density, temperature/EC effects or inadequate curve shape before changing tolerance.
+5. Return the probe to the intended installation, verify the same placement conditions and check its transfer against an independent reference. Turn Calibration mode off. After three new readings, **VWC ready** becomes true only when the current RAW is inside the checked calibration interval.
 
-1. Take a block or a pot of your substrate. Weigh it dry, note the grams. Call this the dry weight.
-2. Saturate it fully with water or feed. Let it drain until it stops dripping. This is field capacity saturation, not dripping wet.
-3. Weigh it again. Call this the wet weight.
-4. Work out the water volume. Water weighs 1 gram per millilitre, so the grams of water is wet weight minus dry weight, and that number in grams is also the millilitres of water.
-5. You need the total volume of the block in millilitres. For a rockwool block, length times width times height in centimetres gives millilitres. For a pot, use the pot volume.
-6. Saturated VWC percent is water millilitres divided by block volume millilitres, times 100.
+Changing A or B clears C. Rechecking one middle point does not prove the entire range: take additional independent points, including near its usable ends, and log the errors. If one corrected generic curve does not fit the data, use a properly characterised multi-point calibration/logger or a probe with a validated calibration for that substrate. Do not hide a bad fit with clipping or a large tolerance.
 
-Example: a 10 by 10 by 6.5 cm rockwool cube is 650 ml of volume. Dry it weighs 40 g. Saturated and drained it weighs 460 g. That is 420 g of water, so 420 ml. 420 divided by 650 is 0.646, times 100 is 64.6 percent. Your saturated reference is about 65.
+## Reading validity and persistence
 
-Set Saturated Reference on the web page to that number.
+- Headline **VWC** is unavailable until A/B/C pass, current RAW is in range, fresh replies exist and Calibration mode is off. It stays unavailable during calibration.
+- **VWC generic estimate** and **VWC two-point estimate** are labelled diagnostics, not irrigation control signals.
+- RAW replies are checked for finite values within the supported range. Missing RAW becomes stale after 90 seconds by default. Temperature and EC have independent timeouts. Receiving the same number again is not a fault.
+- Saved reference values persist; capture-window samples and analytics history do not. Keep power on ten seconds after changing calibration. Calibration mode and experimental pwEC start off after reboot.
+- Use **Restart capture window** after changing a sample's position or moisture condition; it discards old averaging samples. For a new medium, geometry or placement, clear references and recalibrate rather than assuming the old check still applies.
+- Moving between a cube and a slab creates a different measurement context. Record a new calibration/session; do not join their VWC history as if only the water content changed.
 
-### Step 3: capture the saturated point and apply
+## Bulk EC and temperature
 
-Put the probe into that same saturated, drained block. Let it settle for a minute. Press Capture Saturated Point. Then press Apply VWC Calibration.
+The [MT22 manual](https://www.infwin.com/wp-content/uploads/UM-MT22-SDI-12-Soil-Moisture-EC-and-Temperature-Sensor-V6.01.pdf) specifies bulk EC already normalised to **25°C**. Firmware converts µS/cm to dS/m by dividing by 1,000, without a second temperature correction. 1 dS/m = 1 mS/cm. `Bulk EC gain` and `Bulk EC offset` are optional correction controls; defaults are 1 and 0.
 
-The firmware now has both points and sets the gain and offset so dry reads zero and saturated reads your reference. Your VWC is calibrated.
+Before adjusting them, check the probe using manufacturer-appropriate conductivity standards and immersion geometry, with adequate clearance from the vessel. Account for temperature normalisation and compare with an independent calibrated meter. Use more than one standard if changing slope and offset; retain the original and corrected results. A calibration solution tests EC response in that geometry, not the soil/wool/coir pore-EC conversion. Change temperature offset only after an independent temperature comparison.
 
-If you only have one good point, capture just the saturated point and press Apply. It will shift the offset so saturated reads correct, keeping the existing gain. Two points is better.
+Bulk EC changes with water content and substrate geometry. It is not interchangeable with feed EC, runoff EC or extracted pore solution EC. A runoff sample can be a useful separate observation but is not automatically the water surrounding the sensing rods.
 
-## Field capacity
+## Experimental pore EC
 
-Field capacity is the anchor for every dryback number, so set it properly.
+The previous `bulk EC / VWC` and Hilhorst blend has been removed. The bulk/VWC division alone is not a validated salt mass-balance model. Calibrating bulk EC in a solution does not validate pore EC in a substrate.
 
-The manual way, which is the accurate way: saturate the block, let it drain fully, and read the calibrated VWC once it stabilises. Whatever the probe reads at that point is your field capacity. Set the Field Capacity number to it.
+An **Experimental pwEC estimate** switch enables only the Hilhorst-type model `EC25 × 78.45 / (apparent permittivity − offset)`. It is off at every boot, requires checked in-range VWC above the selected minimum, and withholds invalid results rather than clamping them to a plausible limit. The initial offset 4.1 is a historical model assumption, not a measured constant for your rockwool or coco. Fit and validate it against appropriate substrate-specific pore-solution measurements across the intended moisture and EC range before interpreting it quantitatively. Default minimum VWC and numerical bounds are project gates, not a validated operating envelope.
 
-The automatic way: the firmware also learns field capacity on its own. The Field Capacity (learned) sensor tracks the highest peak VWC over the last seven days, which after a few normal irrigation cycles converges on your true field capacity. Watch it for a week and compare it to your manual figure. If they agree, you are set. It is there as a cross-check, it does not overwrite your manual value.
-
-Field capacity is not fixed forever. As roots fill the block the media holds water differently, so re-check it every couple of weeks through a grow.
-
-## Pore EC calibration
-
-Two parts here. First you make sure bulk EC is accurate against a known solution. Then you sanity check the derived pore EC against your runoff.
-
-### Step 1: calibrate bulk EC to a reference solution
-
-1. Get a bottle of EC calibration standard, for example 1.413 dS/m.
-2. Set EC Reference Solution on the web page to that value.
-3. Rinse the probe rods and sit them fully in the solution so all the rods are submerged. When the rods are surrounded by solution, the bulk EC the probe reads is basically the solution EC.
-4. Let it settle for a minute, then press Calibrate EC to Reference.
-
-The firmware sets the EC gain so the reading matches the standard. Rinse the probe with clean water afterwards.
-
-### Step 2: check pore EC against runoff
-
-Bulk EC calibration gets the raw measurement right. Pore EC is derived from it, and the derivation depends on water content, so it is worth a real world check.
-
-1. Run a normal irrigation until you get runoff.
-2. Catch the runoff and measure its EC with your handheld pen.
-3. Compare it to the Pore EC reading on the device at the same time.
-
-Runoff EC and pore EC are not identical, runoff is a mix and pore EC is the root zone, but they should be in the same ballpark and they should move together. If pore EC reads wildly higher or lower than runoff, adjust:
-
-- If pore EC reads too high in dry media, raise Pore EC Blend Low and Blend High a little so the mass balance model gives way to Hilhorst sooner.
-- If pore EC never settles, check that your VWC calibration is right first. Pore EC leans on water content, so a bad VWC number throws the EC off.
-
-## Sanity check against a handheld meter
-
-Whatever you calibrate, cross-check it once against a trusted instrument.
-
-- VWC: squeeze test aside, the honest check is another calibrated probe or the gravimetric method from the VWC section. If your saturated block maths said 65 and the probe reads 65, you are good.
-- Temperature: compare against any thermometer stuck in the block. It should be within half a degree.
-- EC: the runoff comparison above, plus checking the probe in the calibration standard reads the standard.
-
-If a reading is out and will not come right with calibration, suspect the probe before the maths. Budget probes vary unit to unit. Check a second probe if you have one.
-
-## Coco vs rockwool, the short version
-
-The procedure is the same. The numbers differ.
-
-- Rockwool holds less bound water, so field capacity sits higher, often 60 to 70 percent, and drybacks are crisp and fast.
-- Coco holds more bound water, so field capacity is lower, often 50 to 60 percent, and it dries back more slowly. The Coco profile sets a lower default field capacity and blend window to match.
-- Do the two point VWC calibration separately for each. A calibration done in rockwool is not valid in coco.
+For a simpler dependable installation, leave experimental pwEC off and log **RAW, checked VWC, bulk EC, temperature, delivered irrigation and separate solution EC measurements**. A weighing reference and additional representative probes often resolve more uncertainty than adding another unvalidated conversion.
