@@ -5,7 +5,7 @@
   else root.TDRWizard = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this, function(T) {
   'use strict';
-  const REF = '7668f6adf7e95c90d9b21230810079e952a6fb2f';
+  const REF = 'a282517b4d1cfa3c8a8b6e98c499d4974f2e7da4';
   const BOARDS = {
     'atom-lite': { label: 'M5Stack Atom Lite', pin: 26, pins: [26, 32] },
     'atom-s3': { label: 'M5Stack AtomS3 Lite', pin: 1, pins: [1, 2] },
