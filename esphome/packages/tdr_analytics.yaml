@@ -94,7 +94,7 @@ number:
   name: Plateau confirm drop
   optimistic: true
   restore_value: true
-  initial_value: 0.8
+  initial_value: 2.0
   min_value: 0.1
   max_value: 5
   step: 0.1
@@ -108,7 +108,7 @@ number:
   name: Plateau confirm time
   optimistic: true
   restore_value: true
-  initial_value: 10
+  initial_value: 20
   min_value: 1
   max_value: 60
   step: 1
@@ -263,6 +263,13 @@ binary_sensor:
   name: Wetting detected
   id: irrigating
   lambda: return id(vwc_ready).state && id(g_phase)==1;
+- platform: template
+  name: Dryback threshold reached
+  id: dryback_threshold_reached
+  update_interval: 5s
+  lambda: |-
+    if (!id(vwc_ready).state || !std::isfinite(id(g_peak)) || !std::isfinite(id(vwc).state) || !std::isfinite(id(target_dryback).state)) return false;
+    return (id(g_peak)-id(vwc).state) >= id(target_dryback).state;
 - platform: template
   name: Sensor fault
   device_class: problem

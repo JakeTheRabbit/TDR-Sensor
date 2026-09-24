@@ -25,7 +25,10 @@ def source():
         declarations.append(f"Sensor {n['id']}{{{float(n['initial_value'])}f}};")
     for n in core['sensor'][1:]:
         if n.get('id') and n['id']!='vwc': declarations.append(f"Sensor {n['id']};")
-    declarations.extend(['Sensor raw_counts, bulk_ec_25;', 'Binary calibration_mode, enable_pwec, sensor_fresh, capture_ready;', 'Text substrate_profile, calibration_status, last_action;'])
+    declarations.extend(['Sensor raw_counts, bulk_ec_25, substrate_temp;', 'Binary calibration_mode, enable_pwec, sensor_fresh, capture_ready;', 'Text substrate_profile, calibration_status, last_action;'])
+    defaults={n['id']: float(n['initial_value']) for n in analytics['number']}
+    if defaults['fall_confirm']!=2.0 or defaults['peak_confirm_min']!=20:
+        raise SystemExit('plateau defaults changed; update the host timing assertions')
     for g in analytics['globals']+core['globals']:
         declarations.append(f"{g['type']} {g['id']} = {g['initial_value']};")
     return r'''
@@ -48,7 +51,7 @@ struct Sensor {float state=NAN;void publish_state(float s){state=s;}
 struct Text {std::string state="Rockwool cube on slab";void publish_state(const char* v){state=v;} std::string current_option(){return state;}};
 struct Binary {bool state=false;void publish_state(bool s){state=s;}};
 struct Time {struct Stamp {bool is_valid(){return true;}}; Stamp now(){return {};}};
-Sensor vwc, rise_threshold{1.5f}, fall_confirm{.8f}, peak_confirm_min{10}, irr_window_min{20};
+Sensor vwc, rise_threshold{1.5f}, fall_confirm{2.0f}, peak_confirm_min{20}, irr_window_min{20};
 Binary vwc_ready;
 Time tdr_time;
 '''+'\n'.join(declarations)+'\nvoid publish(){\n'+publish+'\n}\nvoid capture(int kind){\n'+capture+'\n}\nvoid process(){\n'+process+'\n}\nvoid receive(float x){\n'+raw+'\n}\nint main(){\n'+math+r'''
@@ -83,23 +86,32 @@ now_ms=1000;raw_counts.state=3000;receive(3000);publish();assert(!vwc_ready.stat
 // Capture requires an enabled calibration mode, a full fresh window, stability and a weighed input.
 weighed_input.state=40;capture(1);assert(std::isnan(a_raw));
 calibration_mode.state=true;capture(1);assert(std::isnan(a_raw));
-for(int i=0;i<10;i++){now_ms+=30000;raw_counts.state=2800;receive(2800);}capture(1);near(a_raw,2800);near(a_vwc,40);near(weighed_input.state,0);
-weighed_input.state=80;for(int i=0;i<10;i++){now_ms+=30000;raw_counts.state=3200;receive(3200);}capture(2);near(b_raw,3200);
+for(int i=0;i<10;i++){now_ms+=30000;raw_counts.state=3000;receive(3000);}
+for(int i=0;i<10;i++){now_ms+=30000;raw_counts.state=3008;receive(3008);}
+capture(1);assert(std::isnan(a_raw)); // 8 RAW counts is inside the spike limit and still drifting
+for(int i=0;i<20;i++){now_ms+=30000;raw_counts.state=2800;receive(2800);}capture(1);near(a_raw,2800);near(a_vwc,40);near(weighed_input.state,0);
+weighed_input.state=80;for(int i=0;i<20;i++){now_ms+=30000;raw_counts.state=3200;receive(3200);}capture(2);near(b_raw,3200);
 publish();assert(std::isnan(vwc.state));
-weighed_input.state=middle;for(int i=0;i<10;i++){now_ms+=30000;raw_counts.state=3000;receive(3000);}capture(3);publish();assert(std::isnan(vwc.state));
+weighed_input.state=middle;for(int i=0;i<20;i++){now_ms+=30000;raw_counts.state=3000;receive(3000);}capture(3);publish();assert(std::isnan(vwc.state));
 calibration_mode.state=false;publish();assert(vwc_ready.state);near(vwc.state,middle);assert(std::isnan(pwec.state));
+enable_pwec.state=true; bulk_ec_25.state=1.0f; substrate_temp.state=25.0f; publish(); assert(std::isnan(pwec.state));
+now_ms+=30000; raw_counts.state=3200; receive(3200); ec_current_frame=true; publish();
+near(pwec.state, 1.0*(80.3-0.37*(25.0-20.0))/(permittivity.state-hilhorst_e0.state));
+substrate_temp.state=20.0f; ec_current_frame=true; publish();
+near(pwec.state, 1.0*80.3/(permittivity.state-hilhorst_e0.state));
+enable_pwec.state=false; publish(); assert(std::isnan(pwec.state));
 now_ms+=90001;publish();assert(!vwc_ready.state && !sensor_fresh.state && std::isnan(vwc.state));
 now_ms+=30000;raw_counts.state=3300;receive(3300);publish();assert(std::isnan(vwc.state));
 // Recapturing an endpoint invalidates the independent check.
 calibration_mode.state=true;weighed_input.state=40;
-for(int i=0;i<10;i++){now_ms+=30000;raw_counts.state=2800;receive(2800);}capture(1);assert(std::isnan(c_raw));
+for(int i=0;i<20;i++){now_ms+=30000;raw_counts.state=2800;receive(2800);}capture(1);assert(std::isnan(c_raw));
 // Discard the calibration-session revision before the independent analytics tests.
 g_analytics_revision=cal_revision;
 // Startup has no fabricated irrigation peak.
 now_ms=1000;vwc_ready.state=true;vwc.state=50;process();assert(std::isnan(g_peak));
 // Rising VWC starts wetting, an exactly flat plateau completes it.
 now_ms+=30000;vwc.state=52;process();assert(g_phase==1 && g_shots_today==1);
-for(int i=0;i<21;i++){now_ms+=30000;process();}
+for(int i=0;i<41;i++){now_ms+=30000;process();}
 assert(g_phase==0);near(g_peak,52);near(g_last_shot,2);
 vwc.state=49;now_ms+=30000;process();near(g_max_dryback_today,3);
 // Calibration scale changes and outages cannot be mistaken for wetting events.
@@ -108,7 +120,12 @@ vwc_ready.state=false;process();assert(g_phase==0 && std::isnan(g_trough));
 // Wetting timer also survives the millisecond counter wrap.
 vwc_ready.state=true;now_ms=std::numeric_limits<uint32_t>::max()-40000;
 vwc.state=50;process();now_ms+=30000;vwc.state=53;process();assert(g_phase==1);
-now_ms+=660000;process();assert(g_phase==0);near(g_peak,53);
+now_ms+=1260000;process();assert(g_phase==0);near(g_peak,53);
+vwc_ready.state=true; g_analytics_revision=cal_revision;
+now_ms=8000000; vwc.state=50; process();
+now_ms+=30000; vwc.state=53; process(); assert(g_phase==1);
+now_ms+=30000; vwc.state=51.5f; process(); assert(g_phase==1);
+now_ms+=30000; vwc.state=51.0f; process(); assert(g_phase==0);
 std::cout << "Firmware calibration, RAW freshness, plateau, reset and rollover assertions passed.\n";
 }
 '''

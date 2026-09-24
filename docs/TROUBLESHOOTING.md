@@ -5,7 +5,7 @@
 | RAW, temperature and EC all unavailable | Power, common ground, actual sensor pinout, SDI-12 address, selected GPIO, ESP-IDF and pinned half-duplex UART component. Confirm sensor variant is SDI-12, not RS485 |
 | RAW works but headline VWC unavailable | Calibration status. A/B need valid weighed references and separation, C needs an independent passing check, current RAW must lie inside A/B, Calibration mode must be off and three new samples must have arrived |
 | Wet index available but VWC unavailable | Expected when only a wet reference has been saved. An index of 100 is not 100% VWC |
-| Capture not ready | Turn Calibration mode on; wait for ten fresh samples. Check RAW spread, contact, cable movement, uneven wetting and continuing drainage |
+| Capture not ready | Turn Calibration mode on; wait for twenty fresh samples. Check RAW spread, generic drift, contact, cable movement, uneven wetting and continuing drainage |
 | Same reading for many minutes | Check RAW sample age. Fresh unchanged replies are valid; a static value alone is not proof of failure |
 | One field remains available while another is unavailable | RAW, EC and temperature have independent validity/timeout checks; inspect the failing field and its protocol mapping |
 | C check fails | Verify tare, sample volume, density/packing, actual independent weight, stable moisture distribution and same probe position. Do not enter the predicted value as C |

@@ -68,6 +68,13 @@
     if (!Number.isFinite(c.tolerance) || c.tolerance < 0.5 || c.tolerance > 10) throw new Error('Third-point tolerance must be 0.5–10 percentage points.');
     return c;
   }
+  function guidance(a, b) {
+    const notes = [];
+    const lo = Math.min(a.raw, b.raw), hi = Math.max(a.raw, b.raw);
+    if (lo < 2700 && hi > 2500) notes.push('A and B overlap the flat part of the factory curve, about RAW 2500–2700 (near 35–45% on the generic scale). A two-point stretch cannot remove that bend. Keep both points on the steep side, above about RAW 2900, when the crop lives there.');
+    if (Math.abs(a.vwc - b.vwc) < 20) notes.push('The weighed span is under 20 percentage points. Headline VWC is withheld outside A–B, so this calibration goes blank before a deeper dryback.');
+    return notes;
+  }
   function calibrationValid(cal, tolerance) {
     if (!cal || cal.method === 'none') return false;
     if (cal.method === 'wet') { wetReference(cal.wet.raw); return true; }
@@ -90,7 +97,7 @@
       else for (const key of ['a', 'b', 'c']) assignments += `\n            id(${key}_raw)=${n(cal[key].raw)}f; id(${key}_vwc)=${n(cal[key].vwc)}f;`;
       // C++ float literals need a decimal or exponent even for integer-valued records.
       assignments = assignments.replace(/=(\d+)f/g, '=$1.0f');
-      yaml += `\n  # Optional manual import. There is no on_boot reference write.\n  - platform: template\n    name: "Import wizard references"\n    entity_category: config\n    on_press:\n      - lambda: |-\n          if (!id(calibration_mode).state || id(substrate_profile).current_option() != ${q(c.profile)}) {\n            id(last_action).publish_state("Press Apply wizard setup first."); return;\n          }\n          if (!id(raw_seen) || (uint32_t)(millis()-id(last_raw_ms)) > \${sample_timeout_ms}U || id(raw_count) < 10) {\n            id(last_action).publish_state("Not imported: wait for ten fresh readings."); return;\n          }\n          float lo=id(raw_window)[0], hi=lo;\n          for (float r:id(raw_window)) {lo=std::min(lo,r); hi=std::max(hi,r);}\n          if (!std::isfinite(id(capture_spread_limit).state) || hi-lo > id(capture_spread_limit).state) {\n            id(last_action).publish_state("Not imported: RAW is still changing."); return;\n          }\n          ${assignments}\n          id(cal_revision)++;\n          id(vwc_ready).publish_state(false); id(vwc).publish_state(NAN);\n          id(last_action).publish_state("Wizard references imported. Check saved values; wait 10s before power off. Turn Calibration mode OFF when finished.");\n      - script.execute: publish_readings\n`;
+      yaml += `\n  # Optional manual import. There is no on_boot reference write.\n  - platform: template\n    name: "Import wizard references"\n    entity_category: config\n    on_press:\n      - lambda: |-\n          if (!id(calibration_mode).state || id(substrate_profile).current_option() != ${q(c.profile)}) {\n            id(last_action).publish_state("Press Apply wizard setup first."); return;\n          }\n          if (!id(raw_seen) || (uint32_t)(millis()-id(last_raw_ms)) > \${sample_timeout_ms}U || id(raw_count) < 20) {\n            id(last_action).publish_state("Not imported: wait for twenty fresh readings."); return;\n          }\n          float lo=id(raw_window)[0], hi=lo;\n          for (float r:id(raw_window)) {lo=std::min(lo,r); hi=std::max(hi,r);}\n          if (!std::isfinite(id(capture_spread_limit).state) || hi-lo > id(capture_spread_limit).state) {\n            id(last_action).publish_state("Not imported: RAW is still changing."); return;\n          }\n          double older=0, newer=0;\n          const bool mineral=id(substrate_profile).current_option()=="Mineral soil";\n          for (int i=0;i<20;++i) {\n            const double raw=id(raw_window)[(id(raw_pos)+i)%20];\n            const double g=mineral ? 100.0*(0.0003879*raw-0.6956) : 100.0*(((6.771e-10*raw-5.105e-6)*raw+1.302e-2)*raw-10.848);\n            if (!std::isfinite(g)) { id(last_action).publish_state("Not imported: generic response is invalid."); return; }\n            if (i<10) older+=g; else newer+=g;\n          }\n          if (!std::isfinite(id(capture_drift_limit).state) || std::fabs(newer/10.0-older/10.0) > id(capture_drift_limit).state) {\n            id(last_action).publish_state("Not imported: reading is still drifting."); return;\n          }\n          ${assignments}\n          id(cal_revision)++;\n          id(vwc_ready).publish_state(false); id(vwc).publish_state(NAN);\n          id(last_action).publish_state("Wizard references imported. Check saved values; wait 10s before power off. Turn Calibration mode OFF when finished.");\n      - script.execute: publish_readings\n`;
     }
     return yaml;
   }
@@ -100,5 +107,5 @@
     if (!BOARDS[c.board].ethernet) s += 'wifi_ssid: "YOUR_WIFI_NETWORK"\nwifi_password: "YOUR_WIFI_PASSWORD"\nfallback_ap_password: "REPLACE_WITH_AT_LEAST_8_CHARACTERS"\n';
     return s;
   }
-  return { REF, BOARDS, PROFILES, generic, point, fit, check, wetReference, config, generateYaml, secretsExample };
+  return { REF, BOARDS, PROFILES, generic, point, fit, check, guidance, wetReference, config, generateYaml, secretsExample };
 });

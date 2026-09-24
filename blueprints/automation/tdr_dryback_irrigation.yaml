@@ -5,6 +5,10 @@ blueprint:
     own maximum runtime. This blueprint never directly opens a valve. It needs
     explicit enabling, checked VWC, fresh data and a recent numeric dryback
     reading. A request does not prove delivery. See docs/HOMEASSISTANT.md.
+    The threshold below is percent of peak VWC. The device setting
+    Dryback observation threshold is percentage points and drives the
+    binary sensor Dryback threshold reached. Ten points on a 75% peak
+    is 13% relative. Those are different triggers.
   domain: automation
   source_url: https://github.com/JakeTheRabbit/TDR-Sensor/blob/main/blueprints/automation/tdr_dryback_irrigation.yaml
   input:
@@ -26,13 +30,13 @@ blueprint:
           filter: {domain: binary_sensor}
     dryback_sensor:
       name: Dryback Percent sensor
-      description: Select relative Dryback Percent (%), not Dryback (pp) or wet index.
+      description: Select relative Dryback Percent (%), not Dryback (pp), the percentage-point threshold binary, or wet index.
       selector:
         entity:
           filter: {domain: sensor}
     dryback_threshold:
       name: Operator-selected relative dryback threshold
-      description: No universal cube, slab or coco target is supplied.
+      description: Percent of peak VWC. No universal cube, slab or coco target is supplied. This is not the device's percentage-point threshold.
       selector:
         number: {min: 1, max: 50, step: 0.5, unit_of_measurement: '%', mode: box}
     shot_button:

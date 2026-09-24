@@ -52,8 +52,9 @@ test('export provides an explicit import action with fresh-data gates, never a b
   assert.match(yaml,/ref: [a-f0-9]{40}/);
   assert.match(yaml,/name: "Import wizard references"/);
   assert.match(yaml,/!id\(calibration_mode\)\.state/);
-  assert.match(yaml,/id\(raw_count\) < 10/);
+  assert.match(yaml,/id\(raw_count\) < 20/);
   assert.match(yaml,/hi-lo > id\(capture_spread_limit\)\.state/);
+  assert.match(yaml,/capture_drift_limit/);
   assert.match(yaml,/id\(c_vwc\)=40\.5f/);
   assert.doesNotMatch(yaml,/^\s*on_boot:/m);
   assert.doesNotMatch(yaml,/restore_value: false/);
@@ -82,6 +83,15 @@ test('all diagrams change physical labels with units and templates preserve phys
   }
 });
 
+test('guidance warns when A and B cross the flat factory bend or span under 20 points',()=>{
+  const flat=W.guidance({raw:2400,vwc:30},{raw:3200,vwc:70});
+  assert.equal(flat.length,1);
+  assert.match(flat[0],/2500/);
+  const narrow=W.guidance({raw:3000,vwc:60},{raw:3200,vwc:72});
+  assert.equal(narrow.length,1);
+  assert.match(narrow[0],/20 percentage points/);
+  assert.deepEqual(W.guidance({raw:3000,vwc:50},{raw:3300,vwc:80}),[]);
+});
 test('SDI-12 letters map to the pinned driver numeric indices, lowercase first',()=>{
   for(const [address,index] of [['0',0],['9',9],['a',10],['z',35],['A',36],['Z',61]]) {
     assert.ok(W.generateYaml({...config,address}).includes('sdi12_address: "'+index+'"'));

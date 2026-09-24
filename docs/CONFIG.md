@@ -35,7 +35,7 @@ For a bare core-only custom board configuration, omit the analytics-dependent LE
 
 ## Sampling
 
-Defaults are `sample_interval: 30s`, `sample_timeout: 90s` and `sample_timeout_ms: "90000"`. If changing the timeout, change both forms to the same duration. Keep timeout longer than the sampling interval and allow for missed replies. The ten-reading capture window takes about five minutes at default cadence; a gap longer than timeout resets it. A successful unchanged reply refreshes data age.
+Defaults are `sample_interval: 30s`, `sample_timeout: 90s` and `sample_timeout_ms: "90000"`. If changing the timeout, change both forms to the same duration. Keep timeout longer than the sampling interval and allow for missed replies. The twenty-reading capture window takes about ten minutes at default cadence; a gap longer than timeout resets it. Capture also requires the generic-response halves of that window to agree within the drift limit (default 0.35 percentage points). A successful unchanged reply refreshes data age.
 
 ## Runtime calibration
 
@@ -90,7 +90,7 @@ after installing the configuration when you want to apply those settings.
 If the wizard contains a valid recorded wet reference or checked A/B/C set, the
 export also adds **Import wizard references**. Use it only for the same physical
 probe, medium and placement. It requires Calibration mode, the expected profile,
-ten fresh readings and a stable RAW window. It replaces references only when
+twenty fresh readings, a RAW spread inside the capture limit, and a generic-response drift inside the drift limit. It replaces references only when
 pressed; rebooting never reimports them. Verify all saved values afterward,
 turn Calibration mode off, and wait ten seconds before disconnecting power.
 

@@ -18,7 +18,9 @@ Version 3 changes measurement meaning. Build and inspect it on a spare node firs
 
 `VWC`, `Temperature`, `Bulk EC 25C`, `Peak VWC`, `Trough VWC`, `Dryback`, `Dryback Percent` and internal IDs needed by the board display are retained where practical. ESPHome/Home Assistant entity IDs can still change when units/names change. Review the actual entity registry and update dashboards and automations rather than assuming an old ID's meaning is unchanged. Old entities may remain unavailable until you remove them.
 
-Use [CALIBRATION.md](CALIBRATION.md) and the [offline setup desk](../tools/setup/index.html). Default polling is now 30 seconds, with a 90-second data timeout and a ten-sample capture window (about five minutes). If changing poll cadence, update both timeout substitutions consistently and leave time for the SDI-12 response cycle.
+Use [CALIBRATION.md](CALIBRATION.md) and the [offline setup desk](../tools/setup/index.html). Default polling is now 30 seconds, with a 90-second data timeout and a twenty-sample capture window (about ten minutes), plus a generic-response drift limit. If changing poll cadence, update both timeout substitutions consistently and leave time for the SDI-12 response cycle.
+
+Nodes flashed before the drift-gate change keep saved preferences. After updating firmware, set **Plateau confirm drop** to 2 percentage points, **Plateau confirm time** to 20 minutes, and **Experimental pwEC minimum VWC** to 55 if those entities still show the previous 0.8, 10 and 30. **Capture maximum drift** is a new entity and starts at 0.35 percentage points. The binary sensor **Dryback threshold reached** follows the percentage-point observation threshold. The irrigation blueprint's number remains percent of peak.
 
 Before relying on a threshold, verify stable wet/dry readings in the actual medium, check a third independently weighed point, test a disconnected sensor, inspect the calibration status and verify delivered irrigation physically. The software tests and firmware builds do not establish agronomic accuracy or electrical compatibility for your installation.
 

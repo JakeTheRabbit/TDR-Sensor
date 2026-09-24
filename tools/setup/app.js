@@ -186,12 +186,12 @@ function renderPlacement() {
   for(const id of ['print-button','download-template','download-diagram'])$(id).disabled=Boolean(placementError);
 }
 function renderCalibration() {
-  const method=state.v['cal-method'], interval=Number(state.v.interval), minutes=interval*10/60;
+  const method=state.v['cal-method'], interval=Number(state.v.interval), minutes=interval*20/60;
   $('wet-cal').hidden=method!=='wet';$('weighed-cal').hidden=method!=='weighed';$('cal-options').hidden=method==='none';$('prepare-note').hidden=method==='none';
   const profile=W.PROFILES[state.v.system==='coco'?state.v.medium:state.v.system];
   const ready=!placementError&&state.v.placed&&!configError;
   $('prepare-note').textContent=ready?`Set Substrate Profile to “${profile}” before capturing. Changing this selection clears the device's old references.`:'Complete sensor positioning in step 2 before recording calibration. You can export starter YAML first if your device needs the v3 controls.';
-  const common=[`On the sensor, select <strong>${escapeHtml(profile)}</strong> and turn <strong>Calibration mode</strong> on.`,`Wait for <strong>Capture ready</strong>: ten fresh readings with a RAW spread no greater than <strong>${fmt(val('spread'),0)} counts</strong>. At ${interval}-second sampling, allow about ${fmt(minutes,1)} minutes.`];
+  const common=[`On the sensor, select <strong>${escapeHtml(profile)}</strong> and turn <strong>Calibration mode</strong> on.`,`Wait for <strong>Capture ready</strong>: twenty fresh readings, RAW spread no greater than <strong>${fmt(val('spread'),0)} counts</strong>, and the two halves of the window within 0.35 percentage points on the generic curve. At ${interval}-second sampling, allow about ${fmt(minutes,1)} minutes. Start that window after drainage already looks finished.`];
   const extra=method==='wet'?['At the settled wet condition, copy <strong>Capture RAW average</strong> below. Press <strong>Save wet reference</strong> on an existing v3 device and verify its saved value.']:['At each moisture level, weigh the same assembly and copy its <strong>Capture RAW average</strong>. Record A and B with enough separation, then measure an independent C.','The point instructions show the exact <strong>Weighed reference VWC</strong> to enter on the device while it is still at that moisture level. Restart the capture window after changing moisture and wait for it to settle.'];
   $('cal-instructions').innerHTML=method==='none'?'<p>The export will contain controller settings and the calibration controls. It will contain no invented wet reference or VWC calibration.</p>':'<ol>'+[...common,...extra].map(s=>'<li>'+s+'</li>').join('')+'</ol>';
   $('record-wet').disabled=!ready;
@@ -214,9 +214,11 @@ function renderCalibration() {
     if(isRecorded('a')&&isRecorded('b')) {
       const a=getPoint('a'),b=getPoint('b');W.fit((a.raw+b.raw)/2,a,b);
       checkBox.textContent=`A–B interval: ${fmt(Math.min(a.raw,b.raw))}–${fmt(Math.max(a.raw,b.raw))} RAW. Record an independent point C to check the fit.`;
+      const notes=W.guidance(a,b);
+      if(notes.length) checkBox.textContent+=` ${notes.join(' ')}`;
       if(isRecorded('c')) {
         const check=W.check(a,b,getPoint('c'),val('tolerance'));
-        checkBox.classList.add(check.passed?'pass':'fail');checkBox.textContent=`Entered-reference check ${check.passed?'passes':'fails'}: ${fmt(check.error,2)} pp error; tolerance ±${fmt(val('tolerance'),1)} pp. ${check.passed?'Verify these saved values and live readiness on the sensor.':'Check the measurements and geometry before repeating calibration.'}`;
+        checkBox.classList.add(check.passed?'pass':'fail');checkBox.textContent=`Entered-reference check ${check.passed?'passes':'fails'}: ${fmt(check.error,2)} pp error; tolerance ±${fmt(val('tolerance'),1)} pp. ${check.passed?'Verify these saved values and live readiness on the sensor.':'Check the measurements and geometry before repeating calibration.'}${notes.length?' '+notes.join(' '):''}`;
       }
     }
   }catch(e){checkBox.classList.add('fail');checkBox.textContent=e.message;}
@@ -235,6 +237,7 @@ function renderExport() {
   if(cal?.method==='weighed') {
     for(const key of ['a','b','c'])rows.push([`Saved ${key.toUpperCase()} RAW / VWC`,`${fmt(cal[key].raw,3)} / ${fmt(cal[key].vwc,1)}%`]);
     rows.push(['Entered C error',`${fmt(cal.check.error,2)} pp`],['Sample actually weighed',unit(val('sample-volume'),'volume')]);
+    for(const note of W.guidance(cal.a,cal.b)) rows.push(['Calibration warning',note]);
   }
   const actions=[`Set Substrate Profile to “${c.profile}” before collecting references. Changing this value clears old references.`,`Set Capture maximum RAW spread to ${c.spread} counts and Third-point tolerance to ${fmt(c.tolerance,1)} pp.`];
   if(cal?.method==='wet')actions.push(`If you pressed Save wet reference at the recorded plateau, verify Saved Wet RAW is ${fmt(cal.wet.raw,3)}. Otherwise use the generated YAML's explicit Import wizard references button for this same sensor and placement.`);

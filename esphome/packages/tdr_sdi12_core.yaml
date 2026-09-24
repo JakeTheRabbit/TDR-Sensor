@@ -72,9 +72,9 @@ globals:
   restore_value: false
   initial_value: 'false'
 - id: raw_window
-  type: std::array<float, 10>
+  type: std::array<float, 20>
   restore_value: false
-  initial_value: std::array<float, 10>{}
+  initial_value: std::array<float, 20>{}
 - id: raw_count
   type: int
   restore_value: false
@@ -157,6 +157,20 @@ number:
   web_server:
     sorting_group_id: sg_calibration
 - platform: template
+  id: capture_drift_limit
+  name: Capture maximum drift
+  optimistic: true
+  restore_value: true
+  initial_value: 0.35
+  min_value: 0.05
+  max_value: 5
+  step: 0.05
+  mode: box
+  entity_category: config
+  unit_of_measurement: pp
+  web_server:
+    sorting_group_id: sg_calibration
+- platform: template
   id: validation_tolerance
   name: Third-point tolerance
   optimistic: true
@@ -232,7 +246,7 @@ number:
   name: Experimental pwEC minimum VWC
   optimistic: true
   restore_value: true
-  initial_value: 30
+  initial_value: 55
   min_value: 10
   max_value: 90
   step: 1
@@ -319,8 +333,8 @@ sensor:
           id(raw_count)=0; id(raw_pos)=0;
         }
         id(raw_window)[id(raw_pos)]=x;
-        id(raw_pos)=(id(raw_pos)+1)%10;
-        if (id(raw_count)<10) id(raw_count)++;
+        id(raw_pos)=(id(raw_pos)+1)%20;
+        if (id(raw_count)<20) id(raw_count)++;
         id(last_raw_ms)=now; id(raw_seen)=true;
     - script.execute: publish_readings
   - index: 2
@@ -430,6 +444,16 @@ sensor:
   accuracy_decimals: 2
   state_class: measurement
   unit_of_measurement: counts
+  entity_category: diagnostic
+  web_server:
+    sorting_group_id: sg_calibration
+- platform: template
+  id: capture_drift
+  name: Capture generic drift
+  update_interval: never
+  accuracy_decimals: 3
+  state_class: measurement
+  unit_of_measurement: pp
   entity_category: diagnostic
   web_server:
     sorting_group_id: sg_calibration
@@ -591,7 +615,7 @@ script:
       id(raw_count)=0; id(raw_pos)=0; id(cal_revision)++;
       id(vwc_ready).publish_state(false); id(vwc).publish_state(NAN);
       id(capture_ready).publish_state(false);
-      id(last_action).publish_state("Window restarted. Wait for 10 new readings before capture.");
+      id(last_action).publish_state("Window restarted. Wait for 20 new readings before capture.");
 - id: clear_calibration
   then:
   - script.execute: restart_capture
@@ -610,15 +634,32 @@ script:
       if (!id(calibration_mode).state) {
         id(last_action).publish_state("Turn Calibration mode ON before capturing references."); return;
       }
-      if (!id(raw_seen) || (uint32_t)(millis()-id(last_raw_ms)) > ${sample_timeout_ms}U || id(raw_count)<10) {
-        id(last_action).publish_state("Not saved: wait for 10 fresh readings."); return;
+      if (!id(raw_seen) || (uint32_t)(millis()-id(last_raw_ms)) > ${sample_timeout_ms}U || id(raw_count)<20) {
+        id(last_action).publish_state("Not saved: wait for 20 fresh readings."); return;
       }
       float lo=id(raw_window)[0], hi=lo, sum=0;
       for (float r:id(raw_window)) {lo=std::min(lo,r); hi=std::max(hi,r); sum+=r;}
       if (!std::isfinite(id(capture_spread_limit).state) || hi-lo > id(capture_spread_limit).state) {
         id(last_action).publish_state("Not saved: RAW is still changing. Check contact and wait."); return;
       }
-      const float r=sum/10.0f;
+      const bool mineral_now=id(substrate_profile).current_option()=="Mineral soil";
+      double older=0, newer=0;
+      for (int i=0;i<20;++i) {
+        const double raw=id(raw_window)[(id(raw_pos)+i)%20];
+        if (!std::isfinite(raw) || raw<=0 || raw>4095) {
+          id(last_action).publish_state("Not saved: generic response is invalid."); return;
+        }
+        const double g=mineral_now ? 100.0*(0.0003879*raw-0.6956) :
+          100.0*(((6.771e-10*raw-5.105e-6)*raw+1.302e-2)*raw-10.848);
+        if (!std::isfinite(g)) {
+          id(last_action).publish_state("Not saved: generic response is invalid."); return;
+        }
+        if (i<10) older+=g; else newer+=g;
+      }
+      if (!std::isfinite(id(capture_drift_limit).state) || std::fabs(newer/10.0-older/10.0) > id(capture_drift_limit).state) {
+        id(last_action).publish_state("Not saved: reading is still drifting. Wait until the substrate settles."); return;
+      }
+      const float r=sum/20.0f;
       if (kind==0) {
         id(wet_raw)=r;
         id(last_action).publish_state("Wet reference saved. Index 100 is not 100% VWC. Wait 10s before power off.");
@@ -677,8 +718,20 @@ script:
         average=sum/id(raw_count); spread=hi-lo;
       }
       id(raw_average).publish_state(average); id(raw_spread).publish_state(spread);
-      id(capture_ready).publish_state(id(calibration_mode).state && fresh && id(raw_count)==10 &&
-        std::isfinite(spread) && spread <= id(capture_spread_limit).state);
+      float drift=NAN;
+      if (fresh && id(raw_count)==20) {
+        double older=0, newer=0; bool drift_ok=true;
+        for (int i=0;i<20;++i) {
+          const double gv=generic(id(raw_window)[(id(raw_pos)+i)%20], mineral);
+          if (!std::isfinite(gv)) { drift_ok=false; break; }
+          if (i<10) older+=gv; else newer+=gv;
+        }
+        if (drift_ok) drift=std::fabs(newer/10.0-older/10.0);
+      }
+      id(capture_drift).publish_state(drift);
+      id(capture_ready).publish_state(id(calibration_mode).state && fresh && id(raw_count)==20 &&
+        std::isfinite(spread) && spread <= id(capture_spread_limit).state &&
+        std::isfinite(drift) && drift <= id(capture_drift_limit).state);
       id(saved_wet_raw).publish_state(id(wet_raw));
       id(saved_a_raw).publish_state(id(a_raw));
       id(saved_a_vwc).publish_state(id(a_vwc));
@@ -705,12 +758,15 @@ script:
       const double inner=((2.887e-9*R-2.080e-5)*R+5.276e-2)*R-43.39;
       const double eb=inner*inner;
       id(permittivity).publish_state(std::isfinite(eb) && eb>=1 && eb<=100 ? eb : NAN);
-      // MT22 EC is already normalised to 25 C. Use water permittivity at 25 C.
-      // This optional Hilhorst output remains a model, not a measured pore EC.
+      // MT22 bulk EC is already normalised to 25 C. Water permittivity follows the slab temperature.
+      // 80.3 - 0.37*(T-20) is 78.45 at 25 C. This remains a model, not a measured pore EC.
+      const float slab_t=id(substrate_temp).state;
+      const double ew=(std::isfinite(slab_t) && slab_t>=-40.f && slab_t<=80.f) ? 80.3-0.37*(static_cast<double>(slab_t)-20.0) : NAN;
       const double denom=eb-id(hilhorst_e0).state, bulk=id(bulk_ec_25).state;
-      const double model=bulk*78.45/denom;
+      const double model=(std::isfinite(ew) && denom>0.5) ? bulk*ew/denom : NAN;
       const bool model_ok=id(enable_pwec).state && id(ec_current_frame) && ready && fitted>=id(pwec_min_vwc).state &&
-        std::isfinite(bulk) && bulk>=0 && std::isfinite(eb) && eb>=1 && eb<=100 && denom>0.5 &&
+        std::isfinite(bulk) && bulk>=0 && std::isfinite(ew) && ew>=70 && ew<=88 &&
+        std::isfinite(eb) && eb>=1 && eb<=100 && denom>0.5 &&
         std::isfinite(model) && model>=0 && model<=30;
       id(pwec).publish_state(model_ok ? model : NAN);
       if (!fresh) id(calibration_status).publish_state("No fresh RAW data. Check wiring, power and sensor.");
